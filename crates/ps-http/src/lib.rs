@@ -14,6 +14,14 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use url::Url;
 
+pub mod client;
+pub mod response;
+pub mod url_sync;
+
+pub use client::*;
+pub use response::*;
+pub use url_sync::*;
+
 #[derive(Error, Debug)]
 pub enum HttpError {
     #[error("Invalid URL: {0}")]

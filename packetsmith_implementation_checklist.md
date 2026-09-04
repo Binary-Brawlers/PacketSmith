@@ -508,79 +508,79 @@ Legend:
 
 ## 11.1 Request Bar
 
-- [ ] method dropdown.
-- [ ] custom method.
-- [ ] URL input.
-- [ ] variable highlighting.
-- [ ] Send button.
-- [ ] Cancel button.
-- [ ] Save button.
-- [ ] request dirty marker.
-- [ ] environment selector visible in shell.
+- [x] method dropdown.
+- [x] custom method.
+- [x] URL input.
+- [x] variable highlighting.
+- [x] Send button.
+- [x] Cancel button.
+- [x] Save button.
+- [x] request dirty marker.
+- [x] environment selector visible in shell.
 
 ## 11.2 URL Parsing
 
-- [ ] HTTP URL parser.
-- [ ] HTTPS.
-- [ ] query parsing.
-- [ ] repeated keys.
-- [ ] path detection.
-- [ ] percent encoding.
-- [ ] resolved preview.
-- [ ] invalid URL diagnostics.
+- [x] HTTP URL parser.
+- [x] HTTPS.
+- [x] query parsing.
+- [x] repeated keys.
+- [x] path detection.
+- [x] percent encoding.
+- [x] resolved preview.
+- [x] invalid URL diagnostics.
 
 ## 11.3 Params
 
-- [ ] key/value table.
-- [ ] enable toggle.
-- [ ] duplicate key.
-- [ ] bulk edit.
-- [ ] descriptions.
-- [ ] sync table with raw URL.
-- [ ] variable support.
+- [x] key/value table.
+- [x] enable toggle.
+- [x] duplicate key.
+- [x] bulk edit.
+- [x] descriptions.
+- [x] sync table with raw URL.
+- [x] variable support.
 
 ## 11.4 Headers
 
-- [ ] key/value table.
-- [ ] enable toggle.
-- [ ] duplicate header names.
-- [ ] bulk edit.
-- [ ] generated headers.
-- [ ] sensitive masking.
-- [ ] variable support.
-- [ ] presets.
+- [x] key/value table.
+- [x] enable toggle.
+- [x] duplicate header names.
+- [x] bulk edit.
+- [x] generated headers.
+- [x] sensitive masking.
+- [x] variable support.
+- [x] presets.
 
 ## 11.5 Body
 
-- [ ] none.
-- [ ] raw.
-- [ ] JSON.
-- [ ] XML.
-- [ ] text.
-- [ ] HTML.
-- [ ] form URL encoded.
-- [ ] multipart form-data.
-- [ ] binary file.
+- [x] none.
+- [x] raw.
+- [x] JSON.
+- [x] XML.
+- [x] text.
+- [x] HTML.
+- [x] form URL encoded.
+- [x] multipart form-data.
+- [x] binary file.
 - [ ] streamed file.
-- [ ] content type selector.
-- [ ] automatic Content-Type where appropriate.
-- [ ] body size indicator.
+- [x] content type selector.
+- [x] automatic Content-Type where appropriate.
+- [x] body size indicator.
 
 ## 11.6 Execution
 
-- [ ] GET.
-- [ ] POST.
-- [ ] PUT.
-- [ ] PATCH.
-- [ ] DELETE.
-- [ ] HEAD.
-- [ ] OPTIONS.
-- [ ] custom methods.
-- [ ] request timeout.
-- [ ] connect timeout.
-- [ ] cancellation.
-- [ ] upload progress.
-- [ ] download progress.
+- [x] GET.
+- [x] POST.
+- [x] PUT.
+- [x] PATCH.
+- [x] DELETE.
+- [x] HEAD.
+- [x] OPTIONS.
+- [x] custom methods.
+- [x] request timeout.
+- [x] connect timeout.
+- [x] cancellation.
+- [x] upload progress.
+- [x] download progress.
 
 ---
 
@@ -588,43 +588,43 @@ Legend:
 
 ## 12.1 Redirects
 
-- [ ] follow toggle.
-- [ ] max redirects.
-- [ ] redirect chain.
-- [ ] auth stripping policy.
-- [ ] redirect diagnostics.
+- [x] follow toggle.
+- [x] max redirects.
+- [x] redirect chain.
+- [x] auth stripping policy.
+- [x] redirect diagnostics.
 
 ## 12.2 Compression
 
-- [ ] gzip.
-- [ ] deflate.
-- [ ] brotli.
+- [x] gzip.
+- [x] deflate.
+- [x] brotli.
 - [ ] zstd if supported.
 - [ ] content decoding diagnostics.
 
 ## 12.3 HTTP Versions
 
-- [ ] HTTP/1.1.
-- [ ] HTTP/2.
-- [ ] negotiated version display.
+- [x] HTTP/1.1.
+- [x] HTTP/2.
+- [x] negotiated version display.
 - [ ] HTTP/3 research spike.
 - [ ] HTTP/3 implementation if selected.
 
 ## 12.4 Proxy
 
-- [ ] system proxy.
-- [ ] HTTP proxy.
-- [ ] HTTPS proxy.
-- [ ] SOCKS5.
-- [ ] proxy auth.
-- [ ] no-proxy rules.
-- [ ] per-request override.
+- [x] system proxy.
+- [x] HTTP proxy.
+- [x] HTTPS proxy.
+- [x] SOCKS5.
+- [x] proxy auth.
+- [x] no-proxy rules.
+- [x] per-request override.
 
 ## 12.5 TLS
 
-- [ ] default certificate verification.
-- [ ] disable verification setting with warning.
-- [ ] custom CA.
+- [x] default certificate verification.
+- [x] disable verification setting with warning.
+- [x] custom CA.
 - [ ] client certificate.
 - [ ] client private key.
 - [ ] PFX/PKCS#12.
@@ -639,59 +639,59 @@ Legend:
 
 ## 13.1 Header
 
-- [ ] status code.
-- [ ] status text.
-- [ ] duration.
-- [ ] size.
-- [ ] content type.
-- [ ] HTTP version.
+- [x] status code.
+- [x] status text.
+- [x] duration.
+- [x] size.
+- [x] content type.
+- [x] HTTP version.
 - [ ] remote IP when available.
 
 ## 13.2 Tabs
 
-- [ ] Body.
-- [ ] Headers.
-- [ ] Cookies.
+- [x] Body.
+- [x] Headers.
+- [x] Cookies.
 - [ ] Tests.
-- [ ] Timing.
+- [x] Timing.
 - [ ] Console link.
 - [ ] Visualization placeholder.
 
 ## 13.3 Body Modes
 
-- [ ] Pretty.
-- [ ] Raw.
-- [ ] Preview.
-- [ ] Hex.
+- [x] Pretty.
+- [x] Raw.
+- [x] Preview.
+- [x] Hex.
 - [ ] Diff placeholder.
 - [ ] Visualization placeholder.
 
 ## 13.4 Formatters
 
-- [ ] JSON.
-- [ ] XML.
+- [x] JSON.
+- [x] XML.
 - [ ] HTML.
 - [ ] YAML.
 - [ ] JavaScript.
-- [ ] plain text fallback.
+- [x] plain text fallback.
 
 ## 13.5 Large Responses
 
 - [ ] stream chunks.
-- [ ] body threshold config.
+- [x] body threshold config.
 - [ ] spool to disk.
 - [ ] virtualized rendering.
 - [ ] disable expensive formatting over threshold.
 - [ ] save to file.
-- [ ] partial preview.
-- [ ] cancellation.
+- [x] partial preview.
+- [x] cancellation.
 - [ ] memory benchmark at 100 MB.
 - [ ] memory benchmark at 1 GB streamed body.
 
 ## 13.6 Search
 
-- [ ] text.
-- [ ] case-sensitive.
+- [x] text.
+- [x] case-sensitive.
 - [ ] regex.
 - [ ] JSON tree search.
 - [ ] JSONPath.
@@ -701,19 +701,19 @@ Legend:
 
 # 14. History
 
-- [ ] persist execution metadata.
-- [ ] redact secrets.
-- [ ] group by date.
-- [ ] search.
-- [ ] filter method.
-- [ ] filter status.
+- [x] persist execution metadata.
+- [x] redact secrets.
+- [x] group by date.
+- [x] search.
+- [x] filter method.
+- [x] filter status.
 - [ ] filter workspace.
-- [ ] replay.
-- [ ] open in new tab.
+- [x] replay.
+- [x] open in new tab.
 - [ ] save as request.
 - [ ] compare with current.
-- [ ] retention settings.
-- [ ] clear history.
+- [x] retention settings.
+- [x] clear history.
 - [ ] incognito mode.
 
 ---

@@ -43,6 +43,16 @@ pub struct HistoryRecord {
     pub executed_at: DateTime<Utc>,
 }
 
+/// Filter criteria for querying execution history.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct HistoryFilter {
+    pub method: Option<String>,
+    pub status_min: Option<u16>,
+    pub status_max: Option<u16>,
+    pub url_contains: Option<String>,
+    pub limit: usize,
+}
+
 /// Entry stored in the derived search index for fast retrieval.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SearchIndexEntry {
@@ -278,6 +288,85 @@ impl CacheStorage {
             results.push(item?);
         }
         Ok(results)
+    }
+
+    /// Queries history applying filters for method, status range, and URL substring.
+    pub fn query_history(&self, filter: &HistoryFilter) -> Result<Vec<HistoryRecord>, StorageError> {
+        let mut query = String::from(
+            r#"
+            SELECT id, request_id, request_name, protocol, method, url,
+                   status_code, duration_ms, response_size_bytes, executed_at
+            FROM history
+            WHERE 1=1
+            "#,
+        );
+
+        if let Some(ref m) = filter.method {
+            query.push_str(&format!(" AND method = '{}'", m.to_uppercase()));
+        }
+        if let Some(min) = filter.status_min {
+            query.push_str(&format!(" AND status_code >= {}", min));
+        }
+        if let Some(max) = filter.status_max {
+            query.push_str(&format!(" AND status_code <= {}", max));
+        }
+        if let Some(ref u) = filter.url_contains {
+            query.push_str(&format!(" AND url LIKE '%{}%'", u));
+        }
+
+        query.push_str(" ORDER BY executed_at DESC");
+        let limit = if filter.limit == 0 { 50 } else { filter.limit };
+        query.push_str(&format!(" LIMIT {}", limit));
+
+        let mut stmt = self.conn.prepare(&query)?;
+        let rows = stmt.query_map([], |row| {
+            let id_str: String = row.get(0)?;
+            let req_id_str: Option<String> = row.get(1)?;
+            let executed_at_str: String = row.get(9)?;
+
+            let id = id_str.parse().unwrap_or_else(|_| ResourceId::new());
+            let request_id = req_id_str.and_then(|s| s.parse().ok());
+            let executed_at = DateTime::parse_from_rfc3339(&executed_at_str)
+                .map(|dt| dt.with_timezone(&Utc))
+                .unwrap_or_else(|_| Utc::now());
+
+            let size_i64: i64 = row.get(8)?;
+
+            Ok(HistoryRecord {
+                id,
+                request_id,
+                request_name: row.get(2)?,
+                protocol: row.get(3)?,
+                method: row.get(4)?,
+                url: row.get(5)?,
+                status_code: row.get(6)?,
+                duration_ms: row.get(7)?,
+                response_size_bytes: size_i64 as usize,
+                executed_at,
+            })
+        })?;
+
+        let mut results = Vec::new();
+        for item in rows {
+            results.push(item?);
+        }
+        Ok(results)
+    }
+
+    /// Clears all execution history records from SQLite cache.
+    pub fn clear_history(&self) -> Result<usize, StorageError> {
+        let deleted = self.conn.execute("DELETE FROM history", [])?;
+        Ok(deleted)
+    }
+
+    /// Prunes execution history records older than the specified number of days.
+    pub fn prune_history(&self, older_than_days: u32) -> Result<usize, StorageError> {
+        let cutoff = Utc::now() - chrono::Duration::days(older_than_days as i64);
+        let deleted = self.conn.execute(
+            "DELETE FROM history WHERE executed_at < ?1",
+            params![cutoff.to_rfc3339()],
+        )?;
+        Ok(deleted)
     }
 
     // -----------------------------------------------------------------------
