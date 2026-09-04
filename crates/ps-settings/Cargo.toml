@@ -1,0 +1,17 @@
+[package]
+name = "ps-settings"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Settings store, schema, and defaults for PacketSmith"
+
+[dependencies]
+ps-ui-components = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+[lints]
+workspace = true

@@ -1,0 +1,19 @@
+[package]
+name = "ps-test-support"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Test fixtures and utilities for PacketSmith"
+
+[dependencies]
+ps-domain = { workspace = true }
+ps-workspace = { workspace = true }
+ps-storage = { workspace = true }
+ps-http = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+
+[lints]
+workspace = true

@@ -34,7 +34,7 @@ Legend:
 
 ## 0.1 Identity
 
-- [ ] Choose final project name.
+- [x] Choose final project name.
 - [ ] Check GitHub organization/repository availability.
 - [ ] Check crates.io names.
 - [ ] Check CLI binary-name conflicts.
@@ -42,30 +42,30 @@ Legend:
 - [ ] Perform trademark search.
 - [ ] Check major domains.
 - [ ] Choose logo direction.
-- [ ] Choose tagline.
+- [x] Choose tagline.
 - [ ] Reserve social/community handles if needed.
 
 ## 0.2 Licensing
 
-- [ ] Choose application license.
-- [ ] Document GPUI Apache-2.0 usage.
-- [ ] Define policy for GPL Zed source reuse.
-- [ ] Add `LICENSE`.
+- [x] Choose application license.
+- [x] Document GPUI Apache-2.0 usage.
+- [x] Define policy for GPL Zed source reuse.
+- [x] Add `LICENSE`.
 - [ ] Add third-party notices strategy.
-- [ ] Add automated dependency-license audit.
-- [ ] Define acceptable dependency licenses.
-- [ ] Document contribution licensing.
+- [x] Add automated dependency-license audit.
+- [x] Define acceptable dependency licenses.
+- [x] Document contribution licensing.
 
 ## 0.3 Product Principles
 
-- [ ] Commit to local-first.
-- [ ] Commit to no-account-required core.
-- [ ] Commit to open workspace format.
-- [ ] Commit to secret-safe exports.
-- [ ] Commit to desktop/CLI core parity.
-- [ ] Commit to protocol-independent core.
-- [ ] Commit to optional telemetry.
-- [ ] Commit to explicit cloud opt-in.
+- [x] Commit to local-first.
+- [x] Commit to no-account-required core.
+- [x] Commit to open workspace format.
+- [x] Commit to secret-safe exports.
+- [x] Commit to desktop/CLI core parity.
+- [x] Commit to protocol-independent core.
+- [x] Commit to optional telemetry.
+- [x] Commit to explicit cloud opt-in.
 
 ---
 
@@ -73,53 +73,53 @@ Legend:
 
 ## 1.1 Repository
 
-- [ ] Create repository.
-- [ ] Add `.gitignore`.
-- [ ] Add `.editorconfig`.
-- [ ] Add `README.md`.
-- [ ] Add `CONTRIBUTING.md`.
-- [ ] Add `CODE_OF_CONDUCT.md`.
-- [ ] Add `SECURITY.md`.
-- [ ] Add pull request template.
-- [ ] Add bug issue template.
-- [ ] Add feature issue template.
-- [ ] Add architecture decision record template.
-- [ ] Add changelog strategy.
+- [x] Create repository.
+- [x] Add `.gitignore`.
+- [x] Add `.editorconfig`.
+- [x] Add `README.md`.
+- [x] Add `CONTRIBUTING.md`.
+- [x] Add `CODE_OF_CONDUCT.md`.
+- [x] Add `SECURITY.md`.
+- [x] Add pull request template.
+- [x] Add bug issue template.
+- [x] Add feature issue template.
+- [x] Add architecture decision record template.
+- [x] Add changelog strategy.
 
 ## 1.2 Rust Toolchain
 
-- [ ] Add `rust-toolchain.toml`.
-- [ ] Pin supported Rust version.
-- [ ] Configure rustfmt.
-- [ ] Configure clippy.
-- [ ] Deny warnings in CI where appropriate.
-- [ ] Add workspace lint configuration.
-- [ ] Add cargo aliases for common tasks.
+- [x] Add `rust-toolchain.toml`.
+- [x] Pin supported Rust version.
+- [x] Configure rustfmt.
+- [x] Configure clippy.
+- [x] Deny warnings in CI where appropriate.
+- [x] Add workspace lint configuration.
+- [x] Add cargo aliases for common tasks.
 
 ## 1.3 Cargo Workspace
 
-- [ ] Create root Cargo workspace.
-- [ ] Create desktop app crate.
-- [ ] Create domain crate.
-- [ ] Create workspace/storage crate.
-- [ ] Create request engine crate.
-- [ ] Create HTTP crate.
-- [ ] Create UI components crate.
-- [ ] Create settings crate.
-- [ ] Create test support crate.
-- [ ] Define dependency direction rules.
-- [ ] Add architecture lint/documentation preventing circular ownership.
+- [x] Create root Cargo workspace.
+- [x] Create desktop app crate.
+- [x] Create domain crate.
+- [x] Create workspace/storage crate.
+- [x] Create request engine crate.
+- [x] Create HTTP crate.
+- [x] Create UI components crate.
+- [x] Create settings crate.
+- [x] Create test support crate.
+- [x] Define dependency direction rules.
+- [x] Add architecture lint/documentation preventing circular ownership.
 
 ## 1.4 GPUI
 
-- [ ] Select GPUI release or commit.
-- [ ] Pin GPUI exactly.
-- [ ] Boot minimal GPUI application.
+- [x] Select GPUI release or commit.
+- [x] Pin GPUI exactly.
+- [x] Boot minimal GPUI application.
 - [ ] Verify macOS build.
 - [ ] Verify Windows build.
 - [ ] Verify Linux X11 build.
 - [ ] Verify Linux Wayland build.
-- [ ] Document GPUI upgrade process.
+- [x] Document GPUI upgrade process.
 - [ ] Add an isolated GPUI upgrade test branch/workflow.
 
 ---
@@ -128,39 +128,39 @@ Legend:
 
 ## 2.1 CI
 
-- [ ] CI on macOS.
-- [ ] CI on Ubuntu.
-- [ ] CI on Windows.
-- [ ] `cargo fmt --check`.
-- [ ] `cargo clippy`.
-- [ ] unit tests.
+- [x] CI on macOS.
+- [x] CI on Ubuntu.
+- [x] CI on Windows.
+- [x] `cargo fmt --check`.
+- [x] `cargo clippy`.
+- [x] unit tests.
 - [ ] integration tests.
-- [ ] dependency vulnerability audit.
-- [ ] dependency license audit.
+- [x] dependency vulnerability audit.
+- [x] dependency license audit.
 - [ ] secret scanning.
 - [ ] build release binaries.
 - [ ] artifact retention for CI builds.
 
 ## 2.2 Local Commands
 
-- [ ] `cargo xtask` or equivalent automation crate.
+- [x] `cargo xtask` or equivalent automation crate.
 - [ ] developer bootstrap command.
 - [ ] run app command.
 - [ ] run fixture servers command.
-- [ ] run all tests command.
-- [ ] run formatting command.
-- [ ] run lint command.
+- [x] run all tests command.
+- [x] run formatting command.
+- [x] run lint command.
 - [ ] build installers command.
 - [ ] generate SBOM command.
 
 ## 2.3 Documentation
 
-- [ ] architecture overview.
-- [ ] crate map.
-- [ ] build prerequisites.
-- [ ] macOS setup.
-- [ ] Linux setup.
-- [ ] Windows setup.
+- [x] architecture overview.
+- [x] crate map.
+- [x] build prerequisites.
+- [x] macOS setup.
+- [x] Linux setup.
+- [x] Windows setup.
 - [ ] debugging guide.
 - [ ] adding a protocol guide.
 - [ ] adding an importer guide.

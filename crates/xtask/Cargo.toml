@@ -1,0 +1,14 @@
+[package]
+name = "xtask"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Internal developer task runner for PacketSmith"
+
+[dependencies]
+anyhow = { workspace = true }
+
+[lints]
+workspace = true

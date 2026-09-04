@@ -1,0 +1,70 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/packetsmith-app",
+    "crates/ps-domain",
+    "crates/ps-workspace",
+    "crates/ps-storage",
+    "crates/ps-request-engine",
+    "crates/ps-http",
+    "crates/ps-ui-components",
+    "crates/ps-settings",
+    "crates/ps-test-support",
+    "crates/xtask",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85.0"
+license = "Apache-2.0"
+authors = ["PacketSmith Contributors"]
+repository = "https://github.com/Binary-Brawlers/PacketSmith"
+homepage = "https://packetsmith.dev"
+description = "Open-Source GPUI API Platform"
+
+[workspace.dependencies]
+# Internal workspace crates
+ps-domain = { path = "crates/ps-domain" }
+ps-workspace = { path = "crates/ps-workspace" }
+ps-storage = { path = "crates/ps-storage" }
+ps-request-engine = { path = "crates/ps-request-engine" }
+ps-http = { path = "crates/ps-http" }
+ps-ui-components = { path = "crates/ps-ui-components" }
+ps-settings = { path = "crates/ps-settings" }
+ps-test-support = { path = "crates/ps-test-support" }
+
+# Async & Runtime
+tokio = { version = "1.43", features = ["full"] }
+async-trait = "0.1"
+futures = "0.3"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+
+# Identifiers & Time
+uuid = { version = "1.12", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+
+# Network & Web
+url = { version = "2.5", features = ["serde"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
+
+# Storage & SQLite
+rusqlite = { version = "0.32", features = ["bundled"] }
+
+# Observability & Errors
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+thiserror = "2.0"
+anyhow = "1.0"
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+missing_debug_implementations = "warn"
+unreachable_pub = "warn"
+
+[workspace.lints.clippy]
+dbg_macro = "warn"

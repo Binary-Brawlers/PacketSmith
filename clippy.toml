@@ -1,0 +1,19 @@
+# Clippy configuration for PacketSmith
+avoid-breaking-exported-api = true
+cognitive-complexity-threshold = 25
+too-many-lines-threshold = 500
+too-many-arguments-threshold = 7
+doc-valid-idents = [
+    "PacketSmith",
+    "GPUI",
+    "OpenAPI",
+    "AsyncAPI",
+    "GraphQL",
+    "gRPC",
+    "WebSocket",
+    "SocketIO",
+    "SQLite",
+    "OAuth",
+    "JSONPath",
+    "XPath",
+]
