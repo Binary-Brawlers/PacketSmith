@@ -722,51 +722,51 @@ Legend:
 
 ## 15.1 Resource Tree
 
-- [ ] collection nodes.
-- [ ] folder nodes.
-- [ ] request nodes.
-- [ ] expand/collapse.
+- [x] collection nodes.
+- [x] folder nodes.
+- [x] request nodes.
+- [x] expand/collapse.
 - [ ] virtualize large trees.
 - [ ] drag/drop.
-- [ ] keyboard navigation.
+- [x] keyboard navigation.
 - [ ] context menu.
 - [ ] multi-select later.
 
 ## 15.2 Operations
 
-- [ ] create collection.
-- [ ] create folder.
-- [ ] create request.
-- [ ] rename.
-- [ ] move.
-- [ ] reorder.
-- [ ] duplicate.
-- [ ] delete.
-- [ ] trash.
-- [ ] restore.
-- [ ] permanent delete.
-- [ ] copy resource path.
-- [ ] reveal file.
+- [x] create collection.
+- [x] create folder.
+- [x] create request.
+- [x] rename.
+- [x] move.
+- [x] reorder.
+- [x] duplicate.
+- [x] delete.
+- [x] trash.
+- [x] restore.
+- [x] permanent delete.
+- [x] copy resource path.
+- [x] reveal file.
 
 ## 15.3 Collection Metadata
 
-- [ ] description.
-- [ ] variables.
-- [ ] auth.
-- [ ] pre-request script.
-- [ ] post-response script.
-- [ ] runner settings.
+- [x] description.
+- [x] variables.
+- [x] auth.
+- [x] pre-request script.
+- [x] post-response script.
+- [x] runner settings.
 
 ## 15.4 Examples
 
-- [ ] save current response as example.
-- [ ] name example.
-- [ ] edit response status.
-- [ ] edit response headers.
-- [ ] edit body.
-- [ ] link request snapshot.
-- [ ] delete example.
-- [ ] duplicate example.
+- [x] save current response as example.
+- [x] name example.
+- [x] edit response status.
+- [x] edit response headers.
+- [x] edit body.
+- [x] link request snapshot.
+- [x] delete example.
+- [x] duplicate example.
 - [ ] use examples in docs.
 - [ ] use examples in mocks.
 
@@ -774,22 +774,22 @@ Legend:
 
 # 16. Tabs, Splits, and Workbench
 
-- [ ] open request tab.
-- [ ] close tab.
-- [ ] dirty close confirmation.
-- [ ] autosave option.
-- [ ] pin tab.
-- [ ] duplicate tab.
-- [ ] reorder tabs.
-- [ ] reopen closed tab.
+- [x] open request tab.
+- [x] close tab.
+- [x] dirty close confirmation.
+- [x] autosave option.
+- [x] pin tab.
+- [x] duplicate tab.
+- [x] reorder tabs.
+- [x] reopen closed tab.
 - [ ] tab overflow menu.
-- [ ] vertical split.
-- [ ] horizontal split.
-- [ ] move tab between splits.
-- [ ] persist layout.
-- [ ] crash restore tabs.
-- [ ] Quick Open.
-- [ ] breadcrumbs.
+- [x] vertical split.
+- [x] horizontal split.
+- [x] move tab between splits.
+- [x] persist layout.
+- [x] crash restore tabs.
+- [x] Quick Open.
+- [x] breadcrumbs.
 
 ---
 

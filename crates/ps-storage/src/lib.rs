@@ -82,6 +82,8 @@ pub struct TabStateRecord {
     pub resource_id: ResourceId,
     pub tab_order: i32,
     pub is_pinned: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pane_id: Option<String>,
 }
 
 /// Detailed run timing metrics.
@@ -192,7 +194,14 @@ impl CacheStorage {
                 workspace_id TEXT NOT NULL,
                 resource_id TEXT NOT NULL,
                 tab_order INTEGER NOT NULL,
-                is_pinned INTEGER NOT NULL DEFAULT 0
+                is_pinned INTEGER NOT NULL DEFAULT 0,
+                pane_id TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS workbench_layout (
+                workspace_id TEXT PRIMARY KEY,
+                layout_json TEXT NOT NULL,
+                updated_at TEXT NOT NULL
             );
 
             CREATE TABLE IF NOT EXISTS blobs (
@@ -515,6 +524,91 @@ impl CacheStorage {
         }
     }
 
+    // -----------------------------------------------------------------------
+    // Open Tabs & Workbench Layout Persistence
+    // -----------------------------------------------------------------------
+
+    pub fn save_open_tabs(&self, workspace_id: &str, tabs: &[TabStateRecord]) -> Result<(), StorageError> {
+        self.conn.execute("DELETE FROM open_tabs WHERE workspace_id = ?1", params![workspace_id])?;
+        let mut stmt = self.conn.prepare(
+            r#"
+            INSERT INTO open_tabs (id, workspace_id, resource_id, tab_order, is_pinned, pane_id)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+            "#,
+        )?;
+
+        for tab in tabs {
+            stmt.execute(params![
+                tab.id,
+                workspace_id,
+                tab.resource_id.to_string(),
+                tab.tab_order,
+                if tab.is_pinned { 1 } else { 0 },
+                tab.pane_id,
+            ])?;
+        }
+        Ok(())
+    }
+
+    pub fn load_open_tabs(&self, workspace_id: &str) -> Result<Vec<TabStateRecord>, StorageError> {
+        let mut stmt = self.conn.prepare(
+            r#"
+            SELECT id, workspace_id, resource_id, tab_order, is_pinned, pane_id
+            FROM open_tabs
+            WHERE workspace_id = ?1
+            ORDER BY tab_order ASC
+            "#,
+        )?;
+
+        let rows = stmt.query_map(params![workspace_id], |row| {
+            let res_id_str: String = row.get(2)?;
+            let resource_id = res_id_str.parse().unwrap_or_else(|_| ResourceId::new());
+            let is_pinned_int: i32 = row.get(4)?;
+
+            Ok(TabStateRecord {
+                id: row.get(0)?,
+                workspace_id: row.get(1)?,
+                resource_id,
+                tab_order: row.get(3)?,
+                is_pinned: is_pinned_int != 0,
+                pane_id: row.get(5)?,
+            })
+        })?;
+
+        let mut results = Vec::new();
+        for r in rows {
+            results.push(r?);
+        }
+        Ok(results)
+    }
+
+    pub fn clear_open_tabs(&self, workspace_id: &str) -> Result<usize, StorageError> {
+        let deleted = self.conn.execute("DELETE FROM open_tabs WHERE workspace_id = ?1", params![workspace_id])?;
+        Ok(deleted)
+    }
+
+    pub fn save_workbench_layout(&self, workspace_id: &str, layout_json: &str) -> Result<(), StorageError> {
+        self.conn.execute(
+            r#"
+            INSERT OR REPLACE INTO workbench_layout (workspace_id, layout_json, updated_at)
+            VALUES (?1, ?2, ?3)
+            "#,
+            params![workspace_id, layout_json, Utc::now().to_rfc3339()],
+        )?;
+        Ok(())
+    }
+
+    pub fn load_workbench_layout(&self, workspace_id: &str) -> Result<Option<String>, StorageError> {
+        let mut stmt = self.conn.prepare("SELECT layout_json FROM workbench_layout WHERE workspace_id = ?1")?;
+        let mut rows = stmt.query(params![workspace_id])?;
+        if let Some(row) = rows.next()? {
+            let json: String = row.get(0)?;
+            Ok(Some(json))
+        } else {
+            Ok(None)
+        }
+    }
+
     pub fn db_path(&self) -> Option<&Path> {
         self.db_path.as_deref()
     }
@@ -627,5 +721,50 @@ mod tests {
         assert!(watcher.should_ignore(Path::new("/tmp/test-workspace/.packetsmith/cache.db")));
         assert!(watcher.should_ignore(Path::new("/tmp/test-workspace/.git/HEAD")));
         assert!(!watcher.should_ignore(Path::new("/tmp/test-workspace/collections/login.req.yaml")));
+    }
+
+    #[test]
+    fn test_open_tabs_and_layout_persistence() {
+        let storage = CacheStorage::open_in_memory().expect("open storage");
+        let ws_id = "ws-123";
+        let req1 = ResourceId::new();
+        let req2 = ResourceId::new();
+
+        let tabs = vec![
+            TabStateRecord {
+                id: "tab-1".to_string(),
+                workspace_id: ws_id.to_string(),
+                resource_id: req1,
+                tab_order: 0,
+                is_pinned: true,
+                pane_id: Some("pane-left".to_string()),
+            },
+            TabStateRecord {
+                id: "tab-2".to_string(),
+                workspace_id: ws_id.to_string(),
+                resource_id: req2,
+                tab_order: 1,
+                is_pinned: false,
+                pane_id: Some("pane-right".to_string()),
+            },
+        ];
+
+        storage.save_open_tabs(ws_id, &tabs).expect("save tabs");
+        let loaded = storage.load_open_tabs(ws_id).expect("load tabs");
+        assert_eq!(loaded.len(), 2);
+        assert_eq!(loaded[0].id, "tab-1");
+        assert!(loaded[0].is_pinned);
+        assert_eq!(loaded[0].pane_id, Some("pane-left".to_string()));
+        assert_eq!(loaded[1].id, "tab-2");
+        assert!(!loaded[1].is_pinned);
+
+        let layout = "{\"split\":\"horizontal\",\"ratio\":0.5}";
+        storage.save_workbench_layout(ws_id, layout).expect("save layout");
+        let loaded_layout = storage.load_workbench_layout(ws_id).expect("load layout");
+        assert_eq!(loaded_layout, Some(layout.to_string()));
+
+        let cleared = storage.clear_open_tabs(ws_id).expect("clear tabs");
+        assert_eq!(cleared, 2);
+        assert_eq!(storage.load_open_tabs(ws_id).expect("load empty").len(), 0);
     }
 }

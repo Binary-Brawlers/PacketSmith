@@ -41,14 +41,18 @@ impl AppState {
     }
 }
 
+use ps_workspace::{CollectionManager, ResourceTree};
+use crate::shell::workbench::WorkbenchState;
+
 /// State of an active open workspace.
 #[derive(Debug, Clone)]
 pub struct WorkspaceState {
     pub workspace_path: PathBuf,
     pub workspace_name: String,
     pub active_environment_id: Option<ResourceId>,
-    pub tabs: Vec<RequestTabState>,
-    pub active_tab_index: usize,
+    pub workbench: WorkbenchState,
+    pub collection_manager: Option<CollectionManager>,
+    pub resource_tree: Option<ResourceTree>,
 }
 
 impl WorkspaceState {
@@ -57,40 +61,58 @@ impl WorkspaceState {
             workspace_path: path,
             workspace_name: name.into(),
             active_environment_id: None,
-            tabs: Vec::new(),
-            active_tab_index: 0,
+            workbench: WorkbenchState::new(),
+            collection_manager: None,
+            resource_tree: None,
         }
+    }
+
+    /// Scans the workspace directory, initializes CollectionManager and builds the ResourceTree.
+    pub fn scan_resources(&mut self) -> Result<(), ps_workspace::WorkspaceError> {
+        let manager = CollectionManager::scan(&self.workspace_path)?;
+        let tree = ResourceTree::from_manager(&manager);
+        self.resource_tree = Some(tree);
+        self.collection_manager = Some(manager);
+        Ok(())
     }
 
     pub fn active_tab(&self) -> Option<&RequestTabState> {
-        self.tabs.get(self.active_tab_index)
+        self.workbench.active_pane().and_then(|p| p.active_tab())
     }
 
     pub fn active_tab_mut(&mut self) -> Option<&mut RequestTabState> {
-        self.tabs.get_mut(self.active_tab_index)
+        let active_id = self.workbench.active_pane_id.clone();
+        self.workbench.get_pane_mut(&active_id).and_then(|p| p.active_tab_mut())
     }
 
     pub fn open_tab(&mut self, request: RequestDocument) {
-        let tab = RequestTabState::new(request);
-        self.tabs.push(tab);
-        self.active_tab_index = self.tabs.len() - 1;
+        self.workbench.open_request(request);
     }
 
     pub fn close_tab(&mut self, index: usize) -> Option<RequestTabState> {
-        if index < self.tabs.len() {
-            let removed = self.tabs.remove(index);
-            if self.active_tab_index >= self.tabs.len() && !self.tabs.is_empty() {
-                self.active_tab_index = self.tabs.len() - 1;
-            }
-            Some(removed)
-        } else {
-            None
+        let active_id = self.workbench.active_pane_id.clone();
+        self.workbench.force_close_tab(&active_id, index)
+    }
+
+    /// Persists open workbench tabs to SQLite cache.
+    pub fn persist_tabs(&self, storage: &CacheStorage, workspace_id: &str) -> Result<(), ps_storage::StorageError> {
+        let records = self.workbench.to_tab_state_records(workspace_id);
+        storage.save_open_tabs(workspace_id, &records)?;
+        Ok(())
+    }
+
+    /// Restores open workbench tabs from SQLite cache.
+    pub fn restore_tabs(&mut self, storage: &CacheStorage, workspace_id: &str) -> Result<(), ps_storage::StorageError> {
+        if let Some(ref manager) = self.collection_manager {
+            let records = storage.load_open_tabs(workspace_id)?;
+            self.workbench.restore_from_records(&records, manager);
         }
+        Ok(())
     }
 }
 
 /// State of an individual request tab in the workbench.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct RequestTabState {
     pub tab_id: ResourceId,
     pub request: RequestDocument,
@@ -129,7 +151,7 @@ mod tests {
     #[test]
     fn test_workspace_tab_lifecycle() {
         let mut ws = WorkspaceState::new(PathBuf::from("/tmp/test"), "Test WS");
-        assert_eq!(ws.tabs.len(), 0);
+        assert!(ws.active_tab().is_none());
 
         let req = RequestDocument::new(
             "Users API",
@@ -140,11 +162,11 @@ mod tests {
         );
 
         ws.open_tab(req);
-        assert_eq!(ws.tabs.len(), 1);
-        assert_eq!(ws.active_tab_index, 0);
+        assert!(ws.active_tab().is_some());
+        assert_eq!(ws.active_tab().unwrap().request.name, "Users API");
 
         let closed = ws.close_tab(0);
         assert!(closed.is_some());
-        assert_eq!(ws.tabs.len(), 0);
+        assert!(ws.active_tab().is_none());
     }
 }

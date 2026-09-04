@@ -12,6 +12,8 @@ ps-domain = { workspace = true }
 serde = { workspace = true }
 serde_yaml = { workspace = true }
 uuid = { workspace = true }
+chrono = { workspace = true }
+serde_json = { workspace = true }
 thiserror = { workspace = true }
 
 [lints]

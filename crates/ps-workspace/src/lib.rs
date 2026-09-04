@@ -15,6 +15,14 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+pub mod collection_manager;
+pub mod tree;
+
+pub use collection_manager::{CollectionManager, ResourceParent, EXAMPLE_EXT, TRASH_DIR_REL};
+pub use tree::{
+    BreadcrumbItem, CollectionNode, FolderNode, QuickOpenResult, RequestNode, ResourceTree,
+};
+
 /// Root manifest filename.
 pub const WORKSPACE_MANIFEST_NAME: &str = "packetsmith.yaml";
 

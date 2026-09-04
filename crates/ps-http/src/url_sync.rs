@@ -127,12 +127,7 @@ impl UrlSyncEngine {
     }
 
     /// Bulk edit serializer: converts key-value pairs into formatted `key: value` multi-line text.
-    pub fn serialize_bulk_text<I, K, V>(items: I) -> String
-    where
-        I: IntoIterator<Item = (K, V)>,
-        K: AsRef<str>,
-        V: AsRef<str>,
-    {
+    pub fn serialize_bulk_text<K: AsRef<str>, V: AsRef<str>>(items: &[(K, V)]) -> String {
         let mut lines = Vec::new();
         for (k, v) in items {
             let key = k.as_ref().trim();
@@ -157,6 +152,7 @@ impl UrlSyncEngine {
 }
 
 /// Standard header presets for quick configuration.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HeaderPresets;
 
 impl HeaderPresets {

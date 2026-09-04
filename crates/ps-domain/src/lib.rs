@@ -291,6 +291,26 @@ impl VariableEntry {
     }
 }
 
+/// Execution configuration for automated collection and folder runs.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RunnerSettings {
+    pub iterations: u32,
+    pub delay_ms: u64,
+    pub stop_on_error: bool,
+    pub persist_variables: bool,
+}
+
+impl Default for RunnerSettings {
+    fn default() -> Self {
+        Self {
+            iterations: 1,
+            delay_ms: 0,
+            stop_on_error: false,
+            persist_variables: false,
+        }
+    }
+}
+
 /// Collection document grouping related folders, requests, and shared configurations.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CollectionDocument {
@@ -304,6 +324,8 @@ pub struct CollectionDocument {
     pub variables: Vec<VariableEntry>,
     #[serde(default)]
     pub scripts: RequestScripts,
+    #[serde(default)]
+    pub runner_settings: RunnerSettings,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub item_order: Vec<ResourceId>,
     pub created_at: DateTime<Utc>,
@@ -320,6 +342,7 @@ impl CollectionDocument {
             auth: AuthConfig::default(),
             variables: Vec::new(),
             scripts: RequestScripts::default(),
+            runner_settings: RunnerSettings::default(),
             item_order: Vec::new(),
             created_at: now,
             updated_at: now,
@@ -401,6 +424,46 @@ pub struct ResponseExample {
     pub headers: std::collections::HashMap<String, String>,
     pub body: String,
     pub recorded_at: DateTime<Utc>,
+}
+
+impl ResponseExample {
+    pub fn new(
+        request_id: ResourceId,
+        name: impl Into<String>,
+        status_code: u16,
+        status_text: impl Into<String>,
+        headers: std::collections::HashMap<String, String>,
+        body: impl Into<String>,
+    ) -> Self {
+        Self {
+            id: ResourceId::new(),
+            request_id,
+            name: name.into(),
+            status_code,
+            status_text: status_text.into(),
+            headers,
+            body: body.into(),
+            recorded_at: Utc::now(),
+        }
+    }
+
+    pub fn to_ref(&self) -> ResponseExampleRef {
+        ResponseExampleRef {
+            id: self.id,
+            name: self.name.clone(),
+            status_code: self.status_code,
+        }
+    }
+}
+
+/// Metadata recorded when a resource is soft-deleted to `.packetsmith/trash/`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TrashMetadata {
+    pub resource_id: ResourceId,
+    pub original_path: String,
+    pub resource_name: String,
+    pub resource_type: String,
+    pub deleted_at: DateTime<Utc>,
 }
 
 #[cfg(test)]

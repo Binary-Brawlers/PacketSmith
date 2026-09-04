@@ -364,7 +364,8 @@ pub struct TabItem {
     pub method_badge: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum SplitOrientation {
     #[default]
     Horizontal,

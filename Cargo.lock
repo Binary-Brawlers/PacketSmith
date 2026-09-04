@@ -3784,9 +3784,11 @@ dependencies = [
  "ps-workspace",
  "serde",
  "serde_json",
+ "thiserror 2.0.20",
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "uuid",
 ]
 
 [[package]]
@@ -4236,8 +4238,10 @@ dependencies = [
 name = "ps-workspace"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "ps-domain",
  "serde",
+ "serde_json",
  "serde_yaml",
  "thiserror 2.0.20",
  "uuid",
