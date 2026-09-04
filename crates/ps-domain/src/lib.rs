@@ -271,6 +271,138 @@ pub struct VariableEntry {
     pub enabled: bool,
 }
 
+impl VariableEntry {
+    pub fn new(key: impl Into<String>, value: impl Into<String>) -> Self {
+        Self {
+            key: key.into(),
+            value: value.into(),
+            is_secret: false,
+            enabled: true,
+        }
+    }
+
+    pub fn secret(key: impl Into<String>, value: impl Into<String>) -> Self {
+        Self {
+            key: key.into(),
+            value: value.into(),
+            is_secret: true,
+            enabled: true,
+        }
+    }
+}
+
+/// Collection document grouping related folders, requests, and shared configurations.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CollectionDocument {
+    pub id: ResourceId,
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub auth: AuthConfig,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub variables: Vec<VariableEntry>,
+    #[serde(default)]
+    pub scripts: RequestScripts,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub item_order: Vec<ResourceId>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl CollectionDocument {
+    pub fn new(name: impl Into<String>) -> Self {
+        let now = Utc::now();
+        Self {
+            id: ResourceId::new(),
+            name: name.into(),
+            description: None,
+            auth: AuthConfig::default(),
+            variables: Vec::new(),
+            scripts: RequestScripts::default(),
+            item_order: Vec::new(),
+            created_at: now,
+            updated_at: now,
+        }
+    }
+}
+
+/// Nested folder document within a collection.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FolderDocument {
+    pub id: ResourceId,
+    pub collection_id: ResourceId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent_id: Option<ResourceId>,
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub auth: AuthConfig,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub variables: Vec<VariableEntry>,
+    #[serde(default)]
+    pub scripts: RequestScripts,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub item_order: Vec<ResourceId>,
+}
+
+impl FolderDocument {
+    pub fn new(collection_id: ResourceId, name: impl Into<String>) -> Self {
+        Self {
+            id: ResourceId::new(),
+            collection_id,
+            parent_id: None,
+            name: name.into(),
+            description: None,
+            auth: AuthConfig::default(),
+            variables: Vec::new(),
+            scripts: RequestScripts::default(),
+            item_order: Vec::new(),
+        }
+    }
+}
+
+/// Environment document storing variables and environment-specific credentials.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct EnvironmentDocument {
+    pub id: ResourceId,
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub variables: Vec<VariableEntry>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl EnvironmentDocument {
+    pub fn new(name: impl Into<String>) -> Self {
+        let now = Utc::now();
+        Self {
+            id: ResourceId::new(),
+            name: name.into(),
+            description: None,
+            variables: Vec::new(),
+            created_at: now,
+            updated_at: now,
+        }
+    }
+}
+
+/// Full response example snapshot associated with a request document.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ResponseExample {
+    pub id: ResourceId,
+    pub request_id: ResourceId,
+    pub name: String,
+    pub status_code: u16,
+    pub status_text: String,
+    pub headers: std::collections::HashMap<String, String>,
+    pub body: String,
+    pub recorded_at: DateTime<Utc>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -297,5 +429,14 @@ mod tests {
             serde_json::from_str(&serialized).expect("Deserialization failed");
         assert_eq!(doc.id, deserialized.id);
         assert_eq!(doc.name, deserialized.name);
+    }
+
+    #[test]
+    fn test_collection_and_environment_models() {
+        let mut col = CollectionDocument::new("Store API");
+        col.variables.push(VariableEntry::new("base_url", "https://api.store.com"));
+        let env = EnvironmentDocument::new("Staging");
+        assert_eq!(col.name, "Store API");
+        assert_eq!(env.name, "Staging");
     }
 }

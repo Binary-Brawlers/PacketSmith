@@ -1,39 +1,15 @@
 //! Main desktop application shell for PacketSmith.
 //!
 //! Orchestrates the application lifecycle, settings loading, local SQLite cache initialization,
-//! and native window bootstrapping via GPUI.
+//! window persistence, notification routing, and native window bootstrapping via GPUI.
+
+pub mod shell;
 
 use std::path::PathBuf;
-use std::sync::Arc;
 use anyhow::Result;
-use ps_settings::AppSettings;
-use ps_storage::CacheStorage;
 use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
-
-/// Global application state root.
-#[derive(Debug)]
-pub struct AppState {
-    pub settings: AppSettings,
-    pub storage: Option<Arc<CacheStorage>>,
-    pub active_workspace_path: Option<PathBuf>,
-}
-
-impl AppState {
-    pub fn new() -> Self {
-        Self {
-            settings: AppSettings::default(),
-            storage: None,
-            active_workspace_path: None,
-        }
-    }
-}
-
-impl Default for AppState {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+use crate::shell::{AppState, WindowState};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -45,14 +21,34 @@ async fn main() -> Result<()> {
 
     info!("Starting PacketSmith desktop platform v{}", env!("CARGO_PKG_VERSION"));
 
-    // 2. Initialize application state
-    let state = AppState::new();
-    info!("Default settings initialized: theme={:?}, verify_ssl={}",
+    // 2. Load persistent window bounds
+    let window_state_path = PathBuf::from(".packetsmith/window_state.json");
+    let window_state = WindowState::load_from_file(&window_state_path);
+
+    // 3. Initialize application state coordinator
+    let mut state = AppState::new(window_state);
+    info!(
+        "Application state initialized: theme={:?}, verify_ssl={}, window_bounds={}x{}",
         state.settings.appearance.theme,
-        state.settings.network.verify_ssl
+        state.settings.network.verify_ssl,
+        state.window_manager.state().width,
+        state.window_manager.state().height,
     );
 
-    // 3. Launch native window shell
+    // 4. Register graceful shutdown hook for window persistence
+    let window_save_path = window_state_path.clone();
+    let current_window_state = state.window_manager.state().clone();
+    state.shutdown_coordinator.register_hook(move || {
+        let _ = current_window_state.save_to_file(&window_save_path);
+    });
+
+    // 5. Send initial welcome toast notification
+    state.notification_manager.info(
+        "Welcome to PacketSmith",
+        Some("Open a workspace or press Cmd+Shift+P for commands".into()),
+    );
+
+    // 6. Launch native window shell
     #[cfg(feature = "gpui-ui")]
     {
         info!("Launching GPUI window system");
@@ -68,7 +64,7 @@ async fn main() -> Result<()> {
 }
 
 #[cfg(feature = "gpui-ui")]
-fn launch_gpui(_state: AppState) -> Result<()> {
+fn launch_gpui(state: AppState) -> Result<()> {
     use gpui::*;
 
     struct PacketSmithAppView;
@@ -103,11 +99,15 @@ fn launch_gpui(_state: AppState) -> Result<()> {
         }
     }
 
-    App::new().run(|cx: &mut AppContext| {
+    let win_state = state.window_manager.state();
+    let width = win_state.width;
+    let height = win_state.height;
+
+    App::new().run(move |cx: &mut AppContext| {
         let options = WindowOptions {
             bounds: WindowBounds::Fixed(Bounds {
                 origin: Point::default(),
-                size: size(px(1280.0), px(800.0)),
+                size: size(px(width), px(height)),
             }),
             titlebar: Some(TitlebarOptions {
                 title: Some("PacketSmith".into()),

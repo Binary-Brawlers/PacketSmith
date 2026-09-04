@@ -171,41 +171,41 @@ Legend:
 
 ## 3.1 Window
 
-- [ ] Main native window.
-- [ ] custom/native titlebar decision.
-- [ ] minimum window size.
-- [ ] window size persistence.
-- [ ] window position persistence.
-- [ ] maximize state persistence.
-- [ ] multi-monitor sanity checks.
-- [ ] DPI scaling.
-- [ ] system theme detection.
+- [x] Main native window.
+- [x] custom/native titlebar decision.
+- [x] minimum window size.
+- [x] window size persistence.
+- [x] window position persistence.
+- [x] maximize state persistence.
+- [x] multi-monitor sanity checks.
+- [x] DPI scaling.
+- [x] system theme detection.
 
 ## 3.2 Application State
 
-- [ ] `AppState`.
-- [ ] workspace manager.
-- [ ] window manager.
-- [ ] command registry.
-- [ ] settings store.
-- [ ] theme registry.
-- [ ] keymap registry.
-- [ ] notification/toast manager.
-- [ ] shutdown coordinator.
+- [x] `AppState`.
+- [x] workspace manager.
+- [x] window manager.
+- [x] command registry.
+- [x] settings store.
+- [x] theme registry.
+- [x] keymap registry.
+- [x] notification/toast manager.
+- [x] shutdown coordinator.
 
 ## 3.3 Command System
 
-- [ ] command trait/type.
-- [ ] command registry.
-- [ ] command IDs.
-- [ ] labels.
-- [ ] keybinding metadata.
-- [ ] enabled/disabled state.
-- [ ] command dispatch.
-- [ ] context-aware command dispatch.
-- [ ] menu integration.
-- [ ] command palette integration.
-- [ ] command tests.
+- [x] command trait/type.
+- [x] command registry.
+- [x] command IDs.
+- [x] labels.
+- [x] keybinding metadata.
+- [x] enabled/disabled state.
+- [x] command dispatch.
+- [x] context-aware command dispatch.
+- [x] menu integration.
+- [x] command palette integration.
+- [x] command tests.
 
 ---
 
@@ -213,38 +213,38 @@ Legend:
 
 ## 4.1 Tokens
 
-- [ ] spacing scale.
-- [ ] radius scale.
-- [ ] typography scale.
-- [ ] border tokens.
-- [ ] elevation tokens.
-- [ ] focus tokens.
-- [ ] semantic colors.
-- [ ] HTTP method colors.
-- [ ] dark theme.
-- [ ] light theme.
-- [ ] system theme.
+- [x] spacing scale.
+- [x] radius scale.
+- [x] typography scale.
+- [x] border tokens.
+- [x] elevation tokens.
+- [x] focus tokens.
+- [x] semantic colors.
+- [x] HTTP method colors.
+- [x] dark theme.
+- [x] light theme.
+- [x] system theme.
 
 ## 4.2 Core Components
 
-- [ ] button.
-- [ ] icon button.
-- [ ] checkbox.
-- [ ] radio.
-- [ ] toggle.
-- [ ] text input.
-- [ ] password input.
-- [ ] search input.
+- [x] button.
+- [x] icon button.
+- [x] checkbox.
+- [x] radio.
+- [x] toggle.
+- [x] text input.
+- [x] password input.
+- [x] search input.
 - [ ] textarea.
 - [ ] number input.
 - [ ] dropdown.
 - [ ] combobox.
 - [ ] multi-select.
-- [ ] tabs.
-- [ ] tab strip.
-- [ ] split pane.
-- [ ] resize handle.
-- [ ] tree.
+- [x] tabs.
+- [x] tab strip.
+- [x] split pane.
+- [x] resize handle.
+- [x] tree.
 - [ ] virtual list.
 - [ ] table.
 - [ ] context menu.
@@ -254,25 +254,25 @@ Legend:
 - [ ] modal.
 - [ ] confirmation dialog.
 - [ ] alert dialog.
-- [ ] toast.
-- [ ] badge.
-- [ ] spinner.
-- [ ] progress bar.
-- [ ] empty state.
-- [ ] error state.
+- [x] toast.
+- [x] badge.
+- [x] spinner.
+- [x] progress bar.
+- [x] empty state.
+- [x] error state.
 - [ ] skeleton/loading state.
 
 ## 4.3 Accessibility
 
-- [ ] focus traversal.
-- [ ] visible focus.
-- [ ] semantic roles.
-- [ ] screen reader labels.
-- [ ] keyboard activation.
-- [ ] contrast audit.
+- [x] focus traversal.
+- [x] visible focus.
+- [x] semantic roles.
+- [x] screen reader labels.
+- [x] keyboard activation.
+- [x] contrast audit.
 - [ ] text scaling.
 - [ ] reduced motion.
-- [ ] no color-only status indicators.
+- [x] no color-only status indicators.
 
 ---
 
@@ -280,37 +280,37 @@ Legend:
 
 ## 5.1 Native Manifest
 
-- [ ] Define `packetsmith.yaml`.
-- [ ] schema version.
-- [ ] workspace stable ID.
-- [ ] workspace name.
-- [ ] resource roots.
-- [ ] settings reference.
-- [ ] format documentation.
+- [x] Define `packetsmith.yaml`.
+- [x] schema version.
+- [x] workspace stable ID.
+- [x] workspace name.
+- [x] resource roots.
+- [x] settings reference.
+- [x] format documentation.
 
 ## 5.2 Resource IDs
 
-- [ ] stable UUID strategy.
-- [ ] resource ID serialization.
-- [ ] collision handling.
-- [ ] copy behavior.
+- [x] stable UUID strategy.
+- [x] resource ID serialization.
+- [x] collision handling.
+- [x] copy behavior.
 - [ ] import behavior.
-- [ ] move/rename preserves ID.
+- [x] move/rename preserves ID.
 
 ## 5.3 Resource Serialization
 
-- [ ] deterministic serialization.
-- [ ] request schema.
-- [ ] collection schema.
-- [ ] folder schema.
-- [ ] environment schema.
-- [ ] example schema.
+- [x] deterministic serialization.
+- [x] request schema.
+- [x] collection schema.
+- [x] folder schema.
+- [x] environment schema.
+- [x] example schema.
 - [ ] mock schema.
 - [ ] monitor schema.
 - [ ] flow schema placeholder.
 - [ ] unknown field preservation policy.
-- [ ] schema validation.
-- [ ] parser error diagnostics.
+- [x] schema validation.
+- [x] parser error diagnostics.
 
 ## 5.4 Migrations
 

@@ -14,6 +14,7 @@ ps-storage = { workspace = true }
 ps-request-engine = { workspace = true }
 ps-http = { workspace = true }
 ps-ui-components = { workspace = true }
+ps-command = { workspace = true }
 ps-settings = { workspace = true }
 
 tokio = { workspace = true }

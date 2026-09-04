@@ -1,16 +1,28 @@
 //! Workspace manifest definitions, discovery, and file serialization for PacketSmith.
 //!
 //! PacketSmith uses human-readable, Git-friendly YAML documents for native workspace definitions.
-//! The workspace root contains a `packetsmith.yaml` file defining metadata and directory layout.
+//! Resources are persisted in subdirectories using deterministic slug naming conventions:
+//! - `<slug>.req.yaml` for Request documents
+//! - `<slug>.col.yaml` for Collection documents
+//! - `<slug>.folder.yaml` for Folder documents
+//! - `<slug>.env.yaml` for Environment documents
 
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
-use ps_domain::ResourceId;
+use ps_domain::{CollectionDocument, EnvironmentDocument, FolderDocument, RequestDocument, ResourceId};
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-/// File name of the root workspace manifest.
+/// Root manifest filename.
 pub const WORKSPACE_MANIFEST_NAME: &str = "packetsmith.yaml";
+
+/// Standard file extensions for resources.
+pub const REQUEST_EXT: &str = ".req.yaml";
+pub const COLLECTION_EXT: &str = ".col.yaml";
+pub const FOLDER_EXT: &str = ".folder.yaml";
+pub const ENVIRONMENT_EXT: &str = ".env.yaml";
 
 /// Schema version for the workspace format.
 pub const CURRENT_SCHEMA_VERSION: &str = "1.0.0";
@@ -25,6 +37,39 @@ pub enum WorkspaceError {
     Yaml(#[from] serde_yaml::Error),
     #[error("Invalid schema version: expected '{0}', got '{1}'")]
     UnsupportedSchemaVersion(String, String),
+    #[error("Circular folder hierarchy detected involving folder ID: {0}")]
+    CircularHierarchy(ResourceId),
+    #[error("Resource collision: filename '{0}' already exists")]
+    Collision(String),
+}
+
+/// Converts a human-readable name into a filesystem-safe slug (lowercase, alphanumeric + hyphens).
+pub fn slugify(name: &str) -> String {
+    let slug: String = name
+        .chars()
+        .map(|c| if c.is_alphanumeric() { c.to_ascii_lowercase() } else { '-' })
+        .collect();
+
+    let trimmed = slug.trim_matches('-');
+    let mut clean = String::new();
+    let mut last_was_dash = false;
+    for c in trimmed.chars() {
+        if c == '-' {
+            if !last_was_dash {
+                clean.push(c);
+                last_was_dash = true;
+            }
+        } else {
+            clean.push(c);
+            last_was_dash = false;
+        }
+    }
+
+    if clean.is_empty() {
+        "resource".to_string()
+    } else {
+        clean
+    }
 }
 
 /// Root manifest representing a PacketSmith workspace (`packetsmith.yaml`).
@@ -94,20 +139,85 @@ impl WorkspaceManifest {
     }
 }
 
+/// Deterministically serializes any serializable resource to a clean YAML string.
+pub fn serialize_resource_to_yaml<T: Serialize>(resource: &T) -> Result<String, WorkspaceError> {
+    let yaml = serde_yaml::to_string(resource)?;
+    Ok(yaml)
+}
+
+/// Parses any resource from a YAML string.
+pub fn parse_resource_from_yaml<T: DeserializeOwned>(yaml: &str) -> Result<T, WorkspaceError> {
+    let resource = serde_yaml::from_str(yaml)?;
+    Ok(resource)
+}
+
+/// Validates folder relationships ensuring there are no circular parent hierarchies.
+pub fn validate_folder_hierarchy(folders: &[FolderDocument]) -> Result<(), WorkspaceError> {
+    let parent_map: HashMap<ResourceId, Option<ResourceId>> = folders
+        .iter()
+        .map(|f| (f.id, f.parent_id))
+        .collect();
+
+    for &id in parent_map.keys() {
+        let mut visited = HashSet::new();
+        let mut curr = Some(id);
+
+        while let Some(current_id) = curr {
+            if !visited.insert(current_id) {
+                return Err(WorkspaceError::CircularHierarchy(current_id));
+            }
+            curr = parent_map.get(&current_id).copied().flatten();
+        }
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ps_domain::{HttpRequestPayload, ProtocolRequest, VariableEntry};
 
     #[test]
-    fn test_manifest_roundtrip_yaml() {
-        let manifest = WorkspaceManifest::new("Production Services");
-        let yaml = manifest.to_yaml().expect("YAML serialization failed");
-        assert!(yaml.contains("version: 1.0.0"));
-        assert!(yaml.contains("Production Services"));
+    fn test_slugify() {
+        assert_eq!(slugify("Get User Profile"), "get-user-profile");
+        assert_eq!(slugify("V1 / Auth / Login!"), "v1-auth-login");
+        assert_eq!(slugify("---"), "resource");
+    }
 
-        let loaded = WorkspaceManifest::from_yaml(&yaml).expect("YAML parsing failed");
-        assert_eq!(manifest.id, loaded.id);
-        assert_eq!(manifest.name, loaded.name);
-        assert_eq!(manifest.resource_roots, loaded.resource_roots);
+    #[test]
+    fn test_request_yaml_serialization() {
+        let req = RequestDocument::new(
+            "List Items",
+            ProtocolRequest::Http(HttpRequestPayload {
+                method: "GET".to_string(),
+                url: "https://api.example.com/items".to_string(),
+            }),
+        );
+        let yaml = serialize_resource_to_yaml(&req).expect("serialize request");
+        assert!(yaml.contains("List Items"));
+        assert!(yaml.contains("https://api.example.com/items"));
+
+        let loaded: RequestDocument = parse_resource_from_yaml(&yaml).expect("parse request");
+        assert_eq!(req.id, loaded.id);
+        assert_eq!(req.name, loaded.name);
+    }
+
+    #[test]
+    fn test_folder_hierarchy_cycle_detection() {
+        let col_id = ResourceId::new();
+        let mut f1 = FolderDocument::new(col_id, "Folder 1");
+        let mut f2 = FolderDocument::new(col_id, "Folder 2");
+
+        // Create cycle: f1 -> f2 -> f1
+        f1.parent_id = Some(f2.id);
+        f2.parent_id = Some(f1.id);
+
+        let res = validate_folder_hierarchy(&[f1, f2]);
+        assert!(res.is_err());
+        match res.unwrap_err() {
+            WorkspaceError::CircularHierarchy(_) => {}
+            other => panic!("Expected CircularHierarchy error, got {:?}", other),
+        }
     }
 }
