@@ -12,6 +12,9 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::{mpsc, watch};
 
+pub mod variables;
+pub use variables::*;
+
 #[derive(Error, Debug)]
 pub enum ExecutionError {
     #[error("Execution was cancelled")]

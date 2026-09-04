@@ -327,24 +327,24 @@ Legend:
 
 ## 6.1 Database
 
-- [ ] create `.packetsmith/cache.db`.
-- [ ] migrations.
-- [ ] WAL mode decision.
+- [x] create `.packetsmith/cache.db`.
+- [x] migrations.
+- [x] WAL mode decision.
 - [ ] corruption handling.
-- [ ] busy timeout.
-- [ ] graceful shutdown.
+- [x] busy timeout.
+- [x] graceful shutdown.
 - [ ] backup strategy.
 
 ## 6.2 Tables
 
-- [ ] history.
-- [ ] history metadata.
-- [ ] search index.
-- [ ] open tabs.
-- [ ] recent resources.
-- [ ] run metadata.
+- [x] history.
+- [x] history metadata.
+- [x] search index.
+- [x] open tabs.
+- [x] recent resources.
+- [x] run metadata.
 - [ ] test results.
-- [ ] blobs.
+- [x] blobs.
 - [ ] sync journal placeholder.
 - [ ] monitor run history.
 - [ ] mock access log.
@@ -352,12 +352,12 @@ Legend:
 
 ## 6.3 File Watcher
 
-- [ ] watch workspace files.
-- [ ] debounce changes.
-- [ ] ignore app-owned cache.
-- [ ] detect external edits.
+- [x] watch workspace files.
+- [x] debounce changes.
+- [x] ignore app-owned cache.
+- [x] detect external edits.
 - [ ] reload clean resource.
-- [ ] conflict UI for dirty local resource.
+- [x] conflict UI for dirty local resource.
 - [ ] rename detection where possible.
 
 ---
@@ -366,29 +366,29 @@ Legend:
 
 ## 7.1 Settings Engine
 
-- [ ] defaults.
-- [ ] user settings.
-- [ ] workspace settings.
-- [ ] merge precedence.
-- [ ] schema.
-- [ ] validation.
+- [x] defaults.
+- [x] user settings.
+- [x] workspace settings.
+- [x] merge precedence.
+- [x] schema.
+- [x] validation.
 - [ ] migration.
-- [ ] reset setting.
-- [ ] reset all.
+- [x] reset setting.
+- [x] reset all.
 
 ## 7.2 Settings UI
 
 - [ ] search.
-- [ ] appearance.
-- [ ] editor.
-- [ ] network.
-- [ ] proxy.
+- [x] appearance.
+- [x] editor.
+- [x] network.
+- [x] proxy.
 - [ ] TLS.
 - [ ] history.
 - [ ] scripts.
 - [ ] runner.
 - [ ] Git.
-- [ ] privacy.
+- [x] privacy.
 - [ ] updates.
 - [ ] plugins placeholder.
 
@@ -398,69 +398,69 @@ Legend:
 
 ## 8.1 Plain Editor
 
-- [ ] Unicode input.
-- [ ] cursor.
-- [ ] selection.
-- [ ] copy.
-- [ ] cut.
-- [ ] paste.
-- [ ] undo.
-- [ ] redo.
+- [x] Unicode input.
+- [x] cursor.
+- [x] selection.
+- [x] copy.
+- [x] cut.
+- [x] paste.
+- [x] undo.
+- [x] redo.
 - [ ] scroll.
 - [ ] mouse selection.
 - [ ] keyboard selection.
 - [ ] Home/End.
-- [ ] word navigation.
-- [ ] line navigation.
+- [x] word navigation.
+- [x] line navigation.
 
 ## 8.2 Code Editor
 
-- [ ] line numbers.
+- [x] line numbers.
 - [ ] syntax highlighting.
-- [ ] bracket matching.
-- [ ] auto indentation.
-- [ ] search.
-- [ ] replace.
+- [x] bracket matching.
+- [x] auto indentation.
+- [x] search.
+- [x] replace.
 - [ ] go to line.
 - [ ] formatter integration.
 - [ ] diagnostics.
 - [ ] completion architecture.
 - [ ] large-file mode.
-- [ ] theme token integration.
+- [x] theme token integration.
 
 ## 8.3 Languages
 
-- [ ] JSON.
+- [x] JSON.
 - [ ] XML.
-- [ ] YAML.
+- [x] YAML.
 - [ ] JavaScript.
 - [ ] GraphQL.
 - [ ] Markdown.
 - [ ] protobuf.
 - [ ] HTML.
-- [ ] plain text.
+- [x] plain text.
 
 ---
 
 # 9. Request Domain Model
 
-- [ ] `RequestDocument`.
-- [ ] `ProtocolRequest`.
-- [ ] `HttpRequest`.
-- [ ] `GraphQlRequest`.
-- [ ] `GrpcRequest`.
-- [ ] `WebSocketRequest`.
-- [ ] `SocketIoRequest`.
-- [ ] `MqttRequest`.
-- [ ] `McpRequest`.
-- [ ] `AiRequest`.
-- [ ] `SoapRequest`.
-- [ ] request settings.
-- [ ] request scripts.
-- [ ] auth config.
+- [x] `RequestDocument`.
+- [x] `ProtocolRequest`.
+- [x] `HttpRequest`.
+- [x] `GraphQlRequest`.
+- [x] `GrpcRequest`.
+- [x] `WebSocketRequest`.
+- [x] `SocketIoRequest`.
+- [x] `MqttRequest`.
+- [x] `McpRequest`.
+- [x] `AiRequest`.
+- [x] `SoapRequest`.
+- [x] request settings.
+- [x] request scripts.
+- [x] auth config.
 - [ ] examples references.
 - [ ] protocol migration strategy.
-- [ ] serialization tests.
+- [x] serialization tests.
 
 ---
 
@@ -468,38 +468,38 @@ Legend:
 
 ## 10.1 Execution API
 
-- [ ] protocol executor trait.
-- [ ] execution context.
-- [ ] cancellation token.
-- [ ] event sink.
-- [ ] structured execution events.
-- [ ] execution summary.
-- [ ] structured errors.
-- [ ] redaction metadata.
+- [x] protocol executor trait.
+- [x] execution context.
+- [x] cancellation token.
+- [x] event sink.
+- [x] structured execution events.
+- [x] execution summary.
+- [x] structured errors.
+- [x] redaction metadata.
 
 ## 10.2 Lifecycle
 
-- [ ] preparing.
-- [ ] resolving variables.
+- [x] preparing.
+- [x] resolving variables.
 - [ ] pre-request script hook.
 - [ ] auth application.
-- [ ] connect.
-- [ ] upload progress.
-- [ ] response headers.
-- [ ] download progress.
+- [x] connect.
+- [x] upload progress.
+- [x] response headers.
+- [x] download progress.
 - [ ] post-response script hook.
 - [ ] tests.
-- [ ] complete.
-- [ ] fail.
-- [ ] cancel.
+- [x] complete.
+- [x] fail.
+- [x] cancel.
 
 ## 10.3 Concurrency
 
-- [ ] never block GPUI thread.
-- [ ] background runtime.
-- [ ] bounded channels.
-- [ ] request cancellation.
-- [ ] shutdown cancellation.
+- [x] never block GPUI thread.
+- [x] background runtime.
+- [x] bounded channels.
+- [x] request cancellation.
+- [x] shutdown cancellation.
 - [ ] orphan task detection.
 
 ---

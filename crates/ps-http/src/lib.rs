@@ -211,6 +211,18 @@ impl ProtocolExecutor for HttpExecutor {
             })
             .await;
 
+        event_sink
+            .emit(ExecutionEvent::ResolvingVariables {
+                timestamp: Utc::now(),
+            })
+            .await;
+
+        let resolver = ps_request_engine::VariableResolver::new()
+            .with_globals((*ctx.variables).clone())
+            .with_vault((*ctx.secrets).clone());
+
+        let resolved_url = resolver.interpolate(&http_payload.url);
+
         if ctx.cancellation_token.is_cancelled() {
             event_sink
                 .emit(ExecutionEvent::Cancelled {
@@ -223,7 +235,7 @@ impl ProtocolExecutor for HttpExecutor {
         let start = Instant::now();
         event_sink
             .emit(ExecutionEvent::Connecting {
-                url: http_payload.url.clone(),
+                url: resolved_url.clone(),
                 timestamp: Utc::now(),
             })
             .await;
@@ -233,7 +245,7 @@ impl ProtocolExecutor for HttpExecutor {
             Err(_) => reqwest::Method::GET,
         };
 
-        let response_res = self.client.request(method, &http_payload.url).send().await;
+        let response_res = self.client.request(method, &resolved_url).send().await;
 
         match response_res {
             Ok(resp) => {
@@ -241,7 +253,8 @@ impl ProtocolExecutor for HttpExecutor {
                 let mut header_map = HashMap::new();
                 for (k, v) in resp.headers() {
                     if let Ok(val) = v.to_str() {
-                        header_map.insert(k.as_str().to_string(), val.to_string());
+                        let safe_val = ps_request_engine::redact_sensitive_header(k.as_str(), val);
+                        header_map.insert(k.as_str().to_string(), safe_val);
                     }
                 }
 
@@ -257,6 +270,13 @@ impl ProtocolExecutor for HttpExecutor {
                     .bytes()
                     .await
                     .map_err(|e| ExecutionError::Network(e.to_string()))?;
+
+                event_sink
+                    .emit(ExecutionEvent::DownloadProgress {
+                        bytes_received: bytes.len(),
+                    })
+                    .await;
+
                 let duration_ms = start.elapsed().as_millis() as u64;
 
                 let summary = ExecutionSummary {
