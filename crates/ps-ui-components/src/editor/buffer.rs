@@ -70,18 +70,8 @@ impl Default for TextBuffer {
     }
 }
 
-impl TextBuffer {
-    pub fn new() -> Self {
-        Self {
-            lines: vec![String::new()],
-            cursor: TextPosition::default(),
-            selection: None,
-            undo_stack: Vec::new(),
-            redo_stack: Vec::new(),
-        }
-    }
-
-    pub fn from_str(text: &str) -> Self {
+impl From<&str> for TextBuffer {
+    fn from(text: &str) -> Self {
         let lines: Vec<String> = if text.is_empty() {
             vec![String::new()]
         } else {
@@ -95,9 +85,35 @@ impl TextBuffer {
             redo_stack: Vec::new(),
         }
     }
+}
 
-    pub fn to_string(&self) -> String {
-        self.lines.join("\n")
+impl std::str::FromStr for TextBuffer {
+    type Err = std::convert::Infallible;
+
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        Ok(Self::from(text))
+    }
+}
+
+impl std::fmt::Display for TextBuffer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.lines.join("\n"))
+    }
+}
+
+impl TextBuffer {
+    pub fn new() -> Self {
+        Self {
+            lines: vec![String::new()],
+            cursor: TextPosition::default(),
+            selection: None,
+            undo_stack: Vec::new(),
+            redo_stack: Vec::new(),
+        }
+    }
+
+    pub fn from_text(text: &str) -> Self {
+        Self::from(text)
     }
 
     pub fn lines(&self) -> &[String] {
@@ -310,8 +326,13 @@ impl TextBuffer {
         } else {
             let mut depth = 0;
             for l in (0..=self.cursor.line).rev() {
-                let end_c = if l == self.cursor.line { col + 1 } else { self.lines[l].len() };
-                for (c_idx, ch) in self.lines[l][..end_c].chars().enumerate().rev() {
+                let end_c = if l == self.cursor.line { col + 1 } else { usize::MAX };
+                let chars: Vec<(usize, char)> = self.lines[l]
+                    .chars()
+                    .enumerate()
+                    .take(end_c)
+                    .collect();
+                for (c_idx, ch) in chars.into_iter().rev() {
                     if ch == close {
                         depth += 1;
                     } else if ch == open {
@@ -390,15 +411,15 @@ pub fn tokenize_json(text: &str) -> Vec<SyntaxToken> {
                     in_string = true;
                     string_start = col;
                 }
-            } else if !in_string {
-                if c == '{' || c == '}' || c == '[' || c == ']' || c == ':' || c == ',' {
-                    tokens.push(SyntaxToken {
-                        token_type: SyntaxTokenType::Punctuation,
-                        line: line_idx,
-                        start_col: col,
-                        end_col: col + 1,
-                    });
-                }
+            } else if !in_string
+                && (c == '{' || c == '}' || c == '[' || c == ']' || c == ':' || c == ',')
+            {
+                tokens.push(SyntaxToken {
+                    token_type: SyntaxTokenType::Punctuation,
+                    line: line_idx,
+                    start_col: col,
+                    end_col: col + 1,
+                });
             }
         }
     }
@@ -422,18 +443,24 @@ mod tests {
 
     #[test]
     fn test_bracket_matching() {
-        let buffer = TextBuffer::from_str("{\"key\": [1, 2]}");
+        let buffer = TextBuffer::from("{\"key\": [1, 2]}");
         let mut b2 = buffer.clone();
         b2.set_cursor(TextPosition::new(0, 0)); // cursor at '{'
         assert_eq!(b2.find_matching_bracket(), Some(TextPosition::new(0, 14)));
 
         b2.set_cursor(TextPosition::new(0, 8)); // cursor at '['
         assert_eq!(b2.find_matching_bracket(), Some(TextPosition::new(0, 13)));
+
+        b2.set_cursor(TextPosition::new(0, 14)); // cursor at '}'
+        assert_eq!(b2.find_matching_bracket(), Some(TextPosition::new(0, 0)));
+
+        b2.set_cursor(TextPosition::new(0, 13)); // cursor at ']'
+        assert_eq!(b2.find_matching_bracket(), Some(TextPosition::new(0, 8)));
     }
 
     #[test]
     fn test_search() {
-        let buffer = TextBuffer::from_str("apple banana apple");
+        let buffer = TextBuffer::from("apple banana apple");
         let matches = buffer.search("apple");
         assert_eq!(matches.len(), 2);
         assert_eq!(matches[0], TextPosition::new(0, 0));

@@ -443,6 +443,7 @@ pub enum FileChangeEvent {
 }
 
 /// Workspace file watcher with debouncing and internal cache ignore rules.
+#[derive(Debug)]
 pub struct WorkspaceWatcher {
     root_path: PathBuf,
     ignore_patterns: Vec<String>,

@@ -4,7 +4,7 @@
 //! which override default configurations.
 
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use ps_ui_components::ThemeMode;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -20,25 +20,13 @@ pub enum SettingsError {
 }
 
 /// Master application-wide settings.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct AppSettings {
     pub appearance: AppearanceSettings,
     pub editor: EditorSettings,
     pub network: NetworkSettings,
     pub proxy: ProxySettings,
     pub privacy: PrivacySettings,
-}
-
-impl Default for AppSettings {
-    fn default() -> Self {
-        Self {
-            appearance: AppearanceSettings::default(),
-            editor: EditorSettings::default(),
-            network: NetworkSettings::default(),
-            proxy: ProxySettings::default(),
-            privacy: PrivacySettings::default(),
-        }
-    }
 }
 
 impl AppSettings {

@@ -168,8 +168,17 @@ struct RegisteredCommand {
     action: Option<Arc<dyn CommandAction>>,
 }
 
+impl fmt::Debug for RegisteredCommand {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RegisteredCommand")
+            .field("descriptor", &self.descriptor)
+            .field("has_action", &self.action.is_some())
+            .finish()
+    }
+}
+
 /// Central registry managing command lookup, palette searching, and execution.
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct CommandRegistry {
     commands: HashMap<CommandId, RegisteredCommand>,
     keymap: HashMap<KeyBinding, CommandId>,

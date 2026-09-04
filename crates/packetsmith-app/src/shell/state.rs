@@ -12,6 +12,7 @@ use crate::shell::shutdown::ShutdownCoordinator;
 use crate::shell::window::{WindowManager, WindowState};
 
 /// Master application state root.
+#[derive(Debug)]
 pub struct AppState {
     pub settings: AppSettings,
     pub window_manager: WindowManager,

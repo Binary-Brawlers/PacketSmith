@@ -26,11 +26,12 @@ serde_json = { workspace = true }
 chrono = { workspace = true }
 
 # Pinned GPUI dependency from Zed Industries (Apache-2.0)
-gpui = { git = "https://github.com/zed-industries/zed", rev = "c93a027ec4602e1741ce6e5feae3f36a8d795d30", optional = true }
+gpui = { git = "https://github.com/zed-industries/zed", tag = "v1.18.0", optional = true }
+gpui_platform = { git = "https://github.com/zed-industries/zed", tag = "v1.18.0", optional = true }
 
 [features]
 default = []
-gpui-ui = ["dep:gpui"]
+gpui-ui = ["dep:gpui", "dep:gpui_platform", "gpui_platform/runtime_shaders"]
 
 [lints]
 workspace = true

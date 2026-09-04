@@ -1,5 +1,6 @@
 //! Graceful application shutdown coordinator.
 
+use std::fmt;
 use std::sync::{Arc, Mutex};
 use tracing::info;
 
@@ -9,6 +10,14 @@ type ShutdownHook = Box<dyn Fn() + Send + Sync>;
 #[derive(Default)]
 pub struct ShutdownCoordinator {
     hooks: Arc<Mutex<Vec<ShutdownHook>>>,
+}
+
+impl fmt::Debug for ShutdownCoordinator {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ShutdownCoordinator")
+            .field("registered_hooks", &self.hooks.lock().map(|h| h.len()).unwrap_or(0))
+            .finish()
+    }
 }
 
 impl ShutdownCoordinator {

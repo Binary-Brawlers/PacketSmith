@@ -7,7 +7,7 @@ use std::time::Instant;
 use async_trait::async_trait;
 use chrono::Utc;
 use ps_domain::{ProtocolRequest, RequestDocument};
-use ps_request-engine::{
+use ps_request_engine::{
     EventSink, ExecutionContext, ExecutionError, ExecutionEvent, ExecutionSummary, ProtocolExecutor,
 };
 use serde::{Deserialize, Serialize};

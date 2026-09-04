@@ -26,7 +26,7 @@ async fn main() -> Result<()> {
     let window_state = WindowState::load_from_file(&window_state_path);
 
     // 3. Initialize application state coordinator
-    let mut state = AppState::new(window_state);
+    let state = AppState::new(window_state);
     info!(
         "Application state initialized: theme={:?}, verify_ssl={}, window_bounds={}x{}",
         state.settings.appearance.theme,
@@ -65,12 +65,13 @@ async fn main() -> Result<()> {
 
 #[cfg(feature = "gpui-ui")]
 fn launch_gpui(state: AppState) -> Result<()> {
-    use gpui::*;
+    use gpui::{prelude::*, *};
+    use gpui_platform::application;
 
     struct PacketSmithAppView;
 
     impl Render for PacketSmithAppView {
-        fn render(&mut self, _cx: &mut ViewContext<Self>) -> impl IntoElement {
+        fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
             div()
                 .flex()
                 .flex_col()
@@ -103,12 +104,10 @@ fn launch_gpui(state: AppState) -> Result<()> {
     let width = win_state.width;
     let height = win_state.height;
 
-    App::new().run(move |cx: &mut AppContext| {
+    application().run(move |cx: &mut App| {
+        let bounds = Bounds::centered(None, size(px(width), px(height)), cx);
         let options = WindowOptions {
-            bounds: WindowBounds::Fixed(Bounds {
-                origin: Point::default(),
-                size: size(px(width), px(height)),
-            }),
+            window_bounds: Some(WindowBounds::Windowed(bounds)),
             titlebar: Some(TitlebarOptions {
                 title: Some("PacketSmith".into()),
                 appears_transparent: true,
@@ -117,8 +116,8 @@ fn launch_gpui(state: AppState) -> Result<()> {
             ..Default::default()
         };
 
-        cx.open_window(options, |cx| {
-            cx.new_view(|_cx| PacketSmithAppView)
+        cx.open_window(options, |_, cx| {
+            cx.new(|_| PacketSmithAppView)
         })
         .expect("Failed to open main window");
     });

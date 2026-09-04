@@ -10,7 +10,7 @@
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
-use ps_domain::{CollectionDocument, EnvironmentDocument, FolderDocument, RequestDocument, ResourceId};
+use ps_domain::{FolderDocument, ResourceId};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -176,7 +176,7 @@ pub fn validate_folder_hierarchy(folders: &[FolderDocument]) -> Result<(), Works
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ps_domain::{HttpRequestPayload, ProtocolRequest, VariableEntry};
+    use ps_domain::{HttpRequestPayload, ProtocolRequest, RequestDocument};
 
     #[test]
     fn test_slugify() {
