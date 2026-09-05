@@ -843,14 +843,18 @@ Legend:
 # 18. Environments
 
 Implementation in progress: native environment lifecycle, typed/default values,
-session-only current overrides, masked table models, native YAML import/export,
+current overrides, masked table models, native YAML import/export,
 non-secret comparison, missing-value detection, and workspace selection/resolver
 integration are implemented in `crates/ps-workspace/src/environments.rs` and
 `crates/packetsmith-app/src/shell/state.rs`. Regression tests are included and
 checked with `cargo check --workspace --all-targets`; tests have not been executed
 under the current type-check-only instruction. Items remain unchecked until the
 required tests and UI integration are verified. Visible editor/selector, shortcut,
-persistent local overrides/selection, and cross-platform verification remain pending.
+and cross-platform verification remain pending. Active selection and non-secret
+local overrides now persist in a versioned, Git-ignored local snapshot. Secret
+overrides remain session-only; rescans preserve compatible session overrides.
+Restart, secret exclusion, stale classification, and invalid snapshot regression
+tests are included (type-checked only).
 See `docs/adr/0012-environment-management.md`.
 
 - [ ] create environment.

@@ -1,5 +1,5 @@
-//! Native environment resources. Local overrides are session-only until a secure
-//! local store is available; neither exports nor workspace files contain secrets.
+//! Native environments with local persistence for non-secret overrides.
+//! Secret overrides stay in memory and are excluded from local snapshots.
 use crate::{
     parse_resource_from_yaml, serialize_resource_to_yaml, WorkspaceError, ENVIRONMENT_EXT,
 };
@@ -61,6 +61,24 @@ impl std::fmt::Debug for EnvironmentManager {
     }
 }
 
+// Do not derive Debug: even non-secret local values are private workspace data.
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct LocalEnvironmentState {
+    version: u32,
+    active: Option<ResourceId>,
+    overrides: Vec<LocalOverride>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct LocalOverride {
+    environment: ResourceId,
+    key: String,
+    value: String,
+    value_type: VariableType,
+}
+
 impl EnvironmentManager {
     pub fn new(workspace: impl Into<PathBuf>) -> Self {
         Self {
@@ -96,6 +114,98 @@ impl EnvironmentManager {
             manager.documents.insert(doc.id, doc);
         }
         Ok(manager)
+    }
+
+    fn local_state_path(&self) -> PathBuf {
+        self.root.parent().expect("environment root has a parent")
+            .join(".packetsmith/environments.local.json")
+    }
+
+    /// Persist selection and non-secret overrides only. The snapshot is separate
+    /// from portable resources, and is never used by duplicate or export.
+    pub fn persist_local_state(&self, active: Option<ResourceId>) -> Result<(), EnvironmentError> {
+        if let Some(id) = active { self.get(id)?; }
+        let mut overrides = Vec::new();
+        for ((id, key), value) in &self.local {
+            if let Some(variable) = self.get(*id)?.variables.iter().find(|v| &v.key == key) {
+                if !variable.is_secret && variable.value_type != VariableType::SecretReference {
+                    overrides.push(LocalOverride {
+                        environment: *id, key: key.clone(), value: value.clone(),
+                        value_type: variable.value_type,
+                    });
+                }
+            }
+        }
+        overrides.sort_by(|a, b| a.environment.to_string().cmp(&b.environment.to_string()).then(a.key.cmp(&b.key)));
+        let state = LocalEnvironmentState { version: 1, active, overrides };
+        let bytes = serde_json::to_vec_pretty(&state)
+            .map_err(|_| EnvironmentError::Invalid("Cannot serialize local environment state".into()))?;
+        let path = self.local_state_path();
+        let directory = path.parent().expect("local state has a parent");
+        fs::create_dir_all(directory)?;
+        let temporary = directory.join(format!("{}.local.json", ResourceId::new()));
+        let result = (|| -> Result<(), EnvironmentError> {
+            let mut options = OpenOptions::new();
+            options.write(true).create_new(true);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::OpenOptionsExt;
+                options.mode(0o600);
+            }
+            let mut file = options.open(&temporary)?;
+            file.write_all(&bytes)?;
+            file.sync_all()?;
+            drop(file);
+            fs::rename(&temporary, &path)?;
+            Ok(())
+        })();
+        if result.is_err() { let _ = fs::remove_file(temporary); }
+        result
+    }
+
+    /// Restore a validated snapshot atomically. Removed keys, changed types and
+    /// newly secret variables cannot resurrect obsolete persisted values.
+    pub fn restore_local_state(&mut self) -> Result<Option<ResourceId>, EnvironmentError> {
+        let bytes = match fs::read(self.local_state_path()) {
+            Ok(bytes) => bytes,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(error) => return Err(error.into()),
+        };
+        let state: LocalEnvironmentState = serde_json::from_slice(&bytes)
+            .map_err(|_| EnvironmentError::Invalid("Invalid local environment state".into()))?;
+        if state.version != 1 {
+            return Err(EnvironmentError::Invalid("Unsupported local environment state version".into()));
+        }
+        let mut local = HashMap::new();
+        for entry in state.overrides {
+            let Some(variable) = self.documents.get(&entry.environment)
+                .and_then(|doc| doc.variables.iter().find(|v| v.key == entry.key)) else { continue; };
+            if variable.is_secret || variable.value_type == VariableType::SecretReference
+                || variable.value_type != entry.value_type { continue; }
+            validate_value(variable.value_type, &entry.value)?;
+            if local.insert((entry.environment, entry.key), entry.value).is_some() {
+                return Err(EnvironmentError::Invalid("Duplicate local environment override".into()));
+            }
+        }
+        self.local = local;
+        Ok(state.active.filter(|id| self.documents.contains_key(id)))
+    }
+
+    /// Rescan portable resources while retaining compatible session overrides,
+    /// including secrets. Failure leaves the original manager untouched.
+    pub fn reload(&mut self) -> Result<(), EnvironmentError> {
+        let mut next = Self::scan(self.root.parent().expect("environment root has a parent"))?;
+        for ((id, key), value) in &self.local {
+            let old = self.documents.get(id).and_then(|doc| doc.variables.iter().find(|v| &v.key == key));
+            let new = next.documents.get(id).and_then(|doc| doc.variables.iter().find(|v| &v.key == key));
+            if let (Some(old), Some(new)) = (old, new) {
+                if old.is_secret == new.is_secret && old.value_type == new.value_type {
+                    next.local.insert((*id, key.clone()), value.clone());
+                }
+            }
+        }
+        *self = next;
+        Ok(())
     }
 
     pub fn list(&self) -> Vec<&EnvironmentDocument> {
@@ -401,6 +511,73 @@ mod tests {
         fn drop(&mut self) {
             let _ = fs::remove_dir_all(&self.0);
         }
+    }
+
+    #[test]
+    fn local_snapshot_restores_selection_and_empty_values_without_secrets() {
+        let root = Fixture::new();
+        let mut manager = EnvironmentManager::new(&root.0);
+        let id = manager.create("Production").unwrap();
+        let mut doc = manager.get(id).unwrap().clone();
+        doc.variables = vec![VariableEntry::new("host", "default"), VariableEntry::secret("token", "")];
+        manager.save(doc).unwrap();
+        manager.set_current(id, "host", Some(String::new())).unwrap();
+        manager.set_current(id, "token", Some("private-token".into())).unwrap();
+        manager.persist_local_state(Some(id)).unwrap();
+        let snapshot = fs::read_to_string(manager.local_state_path()).unwrap();
+        assert!(!snapshot.contains("private-token"));
+        assert!(!snapshot.contains("token"));
+        let mut restored = EnvironmentManager::scan(&root.0).unwrap();
+        assert_eq!(restored.restore_local_state().unwrap(), Some(id));
+        assert_eq!(restored.rows(id).unwrap()[0].current_value.as_deref(), Some(""));
+        assert_eq!(restored.rows(id).unwrap()[1].current_value, None);
+        manager.set_current(id, "host", None).unwrap();
+        manager.persist_local_state(None).unwrap();
+        assert_eq!(restored.restore_local_state().unwrap(), None);
+        assert_eq!(restored.rows(id).unwrap()[0].current_value, None);
+    }
+
+    #[test]
+    fn reload_retains_sessions_but_discards_changed_classifications() {
+        let root = Fixture::new();
+        let mut manager = EnvironmentManager::new(&root.0);
+        let id = manager.create("Staging").unwrap();
+        let mut doc = manager.get(id).unwrap().clone();
+        doc.variables = vec![VariableEntry::new("host", "default"), VariableEntry::secret("token", "")];
+        manager.save(doc.clone()).unwrap();
+        manager.set_current(id, "host", Some("local".into())).unwrap();
+        manager.set_current(id, "token", Some("session-secret".into())).unwrap();
+        manager.persist_local_state(Some(id)).unwrap();
+        manager.reload().unwrap();
+        assert_eq!(manager.effective_variables(id).unwrap()[1].value, "session-secret");
+        let mut external = EnvironmentManager::scan(&root.0).unwrap();
+        doc.variables[0].is_secret = true;
+        external.save(doc).unwrap();
+        manager.reload().unwrap();
+        assert_eq!(manager.rows(id).unwrap()[0].current_value, None);
+        assert_eq!(external.restore_local_state().unwrap(), Some(id));
+        assert_eq!(external.rows(id).unwrap()[0].current_value, None);
+        external.delete(id).unwrap();
+        assert_eq!(external.restore_local_state().unwrap(), None);
+    }
+
+    #[test]
+    fn invalid_snapshot_is_atomic_and_does_not_echo_contents() {
+        let root = Fixture::new();
+        let mut manager = EnvironmentManager::new(&root.0);
+        let id = manager.create("Staging").unwrap();
+        let mut doc = manager.get(id).unwrap().clone();
+        doc.variables.push(VariableEntry::new("host", "default"));
+        manager.save(doc).unwrap();
+        manager.set_current(id, "host", Some("local".into())).unwrap();
+        manager.persist_local_state(Some(id)).unwrap();
+        fs::write(manager.local_state_path(), "private-invalid-content").unwrap();
+        let error = manager.restore_local_state().unwrap_err();
+        assert!(!error.to_string().contains("private-invalid-content"));
+        assert_eq!(manager.effective_variables(id).unwrap()[0].value, "local");
+        fs::write(manager.local_state_path(), r#"{"version":2,"active":null,"overrides":[]}"#).unwrap();
+        assert!(manager.restore_local_state().is_err());
+        assert_eq!(manager.effective_variables(id).unwrap()[0].value, "local");
     }
 
     #[test]

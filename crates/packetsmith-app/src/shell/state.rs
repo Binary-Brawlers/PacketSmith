@@ -75,8 +75,14 @@ impl WorkspaceState {
     /// Scans the workspace directory, initializes CollectionManager and builds the ResourceTree.
     pub fn scan_resources(&mut self) -> Result<(), ps_workspace::WorkspaceError> {
         let manager = CollectionManager::scan(&self.workspace_path)?;
-        let environments = ps_workspace::EnvironmentManager::scan(&self.workspace_path)
+        let mut environments = self.environments.clone();
+        environments.reload()
             .map_err(|error| ps_workspace::WorkspaceError::InvalidEnvironment(error.to_string()))?;
+        let active = if self.collection_manager.is_none() {
+            environments.restore_local_state()
+                .map_err(|error| ps_workspace::WorkspaceError::InvalidEnvironment(error.to_string()))?
+        } else { self.active_environment_id };
+        self.active_environment_id = active;
         let tree = ResourceTree::from_manager(&manager);
         self.environments = environments;
         if self.active_environment_id.is_some_and(|id| self.environments.get(id).is_err()) {
@@ -92,24 +98,30 @@ impl WorkspaceState {
     /// Select an environment atomically; None restores the lower-priority scopes.
     pub fn select_environment(&mut self, id: Option<ResourceId>) -> Result<(), ps_workspace::EnvironmentError> {
         if let Some(id) = id { self.environments.get(id)?; }
+        self.environments.persist_local_state(id)?;
         self.active_environment_id = id;
         self.refresh_environment_variables()
     }
 
     pub fn save_environment(&mut self, doc: ps_domain::EnvironmentDocument) -> Result<(), ps_workspace::EnvironmentError> {
         self.environments.save(doc)?;
-        self.refresh_environment_variables()
+        self.refresh_environment_variables()?;
+        self.environments.persist_local_state(self.active_environment_id)
     }
 
     pub fn set_environment_current(&mut self, id: ResourceId, key: &str, value: Option<String>) -> Result<(), ps_workspace::EnvironmentError> {
-        self.environments.set_current(id, key, value)?;
+        let mut environments = self.environments.clone();
+        environments.set_current(id, key, value)?;
+        environments.persist_local_state(self.active_environment_id)?;
+        self.environments = environments;
         self.refresh_environment_variables()
     }
 
     pub fn delete_environment(&mut self, id: ResourceId) -> Result<(), ps_workspace::EnvironmentError> {
         self.environments.delete(id)?;
         if self.active_environment_id == Some(id) { self.active_environment_id = None; }
-        self.refresh_environment_variables()
+        self.refresh_environment_variables()?;
+        self.environments.persist_local_state(self.active_environment_id)
     }
 
     /// Refresh after editing defaults or local overrides, and before execution.
@@ -200,6 +212,25 @@ impl RequestTabState {
 mod tests {
     use super::*;
     use ps_domain::{HttpRequestPayload, ProtocolRequest};
+
+    #[test]
+    fn environment_selection_and_local_values_survive_workspace_restart() {
+        let path = std::env::temp_dir().join(format!("ps-env-restart-{}", ResourceId::new()));
+        let mut ws = WorkspaceState::new(path.clone(), "Workspace");
+        let id = ws.environments.create("Staging").unwrap();
+        let mut doc = ws.environments.get(id).unwrap().clone();
+        doc.variables.push(ps_domain::VariableEntry::new("host", "default"));
+        ws.save_environment(doc).unwrap();
+        ws.select_environment(Some(id)).unwrap();
+        ws.set_environment_current(id, "host", Some("local".into())).unwrap();
+        let mut restored = WorkspaceState::new(path.clone(), "Workspace");
+        restored.scan_resources().unwrap();
+        assert_eq!(restored.active_environment_id, Some(id));
+        assert_eq!(restored.variable_ui.resolver().resolve_var("host").as_deref(), Some("local"));
+        restored.scan_resources().unwrap();
+        assert_eq!(restored.variable_ui.resolver().resolve_var("host").as_deref(), Some("local"));
+        std::fs::remove_dir_all(path).unwrap();
+    }
 
     #[test]
     fn environment_switch_clears_stale_values_and_preserves_globals() {

@@ -20,7 +20,13 @@ and description are optional on deserialization. An empty value represents an
 unconfigured variable; template-containing values are validated after resolution
 by their consumer, rather than being parsed as literal numbers or JSON here.
 
-Current values exist only in session memory. They override defaults, including an
+Secret current values exist only in session memory. Non-secret current values and
+active selection persist in `.packetsmith/environments.local.json`, a versioned,
+Git-ignored local snapshot written through a sibling temporary file. On Unix new
+snapshot files have owner-only permissions. Explicit empty overrides are retained.
+Malformed or unsupported snapshots return sanitized errors without mutating
+current state. Missing resources, removed keys, changed types, and variables now
+classified as secret are ignored when restoring. They override defaults, including an
 explicit empty override, and retain the variable's secret classification. Removing
 an override restores the default. Changing type or secrecy discards its override.
 Duplicates and exports exclude current values. Raw secret defaults are stripped
@@ -36,7 +42,12 @@ not validate vault availability or infer production requirements from other file
 Workspace selection replaces only the environment resolver scope, preserving other
 scopes and dynamic providers. Workspace save/current/delete methods refresh the
 resolver. Callers that mutate the manager directly must refresh before execution.
-Neither active selection nor current overrides survive restart yet.
+Workspace scans restore selection and non-secret overrides on initial load. Later
+rescans retain compatible session values, including secrets. Failed scans preserve
+the previous manager. Selection/current edits persist before applying in-memory
+changes; resource saves/deletes refresh the resolver before persisting the local
+snapshot. If that latter write fails, the resource edit is already committed and
+the error is returned. Secret persistence awaits secure vault storage.
 
 ## Validation
 
