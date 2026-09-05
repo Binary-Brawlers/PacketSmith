@@ -302,7 +302,9 @@ impl WorkbenchState {
         }
 
         let removed = pane.tabs.remove(tab_index);
-        if pane.active_tab_index >= pane.tabs.len() && !pane.tabs.is_empty() {
+        if tab_index < pane.active_tab_index {
+            pane.active_tab_index = pane.active_tab_index.saturating_sub(1);
+        } else if pane.active_tab_index >= pane.tabs.len() && !pane.tabs.is_empty() {
             pane.active_tab_index = pane.tabs.len() - 1;
         }
 
@@ -324,7 +326,9 @@ impl WorkbenchState {
         let pane = self.panes.get_mut(pane_id)?;
         if tab_index < pane.tabs.len() {
             let removed = pane.tabs.remove(tab_index);
-            if pane.active_tab_index >= pane.tabs.len() && !pane.tabs.is_empty() {
+            if tab_index < pane.active_tab_index {
+                pane.active_tab_index = pane.active_tab_index.saturating_sub(1);
+            } else if pane.active_tab_index >= pane.tabs.len() && !pane.tabs.is_empty() {
                 pane.active_tab_index = pane.tabs.len() - 1;
             }
             self.closed_tabs.push(ClosedTabInfo {

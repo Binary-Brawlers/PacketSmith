@@ -99,7 +99,7 @@ impl EnvironmentView {
             .as_ref()
             .expect("workspace initialized")
     }
-    fn ws_mut(&mut self) -> &mut WorkspaceState {
+    pub(super) fn ws_mut(&mut self) -> &mut WorkspaceState {
         self.state
             .active_workspace
             .as_mut()
@@ -318,14 +318,14 @@ impl EnvironmentView {
             .role(Role::Button)
             .aria_label(label.clone())
             .px_3()
-            .py_2()
+            .py_1p5()
             .rounded_md()
             .bg(rgb(if primary {
                 theme::ACCENT
             } else if selected {
                 theme::HOVER
             } else {
-                theme::SIDEBAR
+                theme::SURFACE_ELEVATED
             }))
             .text_size(px(12.))
             .text_color(rgb(if primary {
@@ -339,15 +339,15 @@ impl EnvironmentView {
             .border_color(rgb(if primary {
                 theme::ACCENT
             } else if selected {
-                theme::BORDER
+                theme::BORDER_FOCUS
             } else {
-                theme::SIDEBAR
+                theme::BORDER
             }))
             .focusable()
             .tab_index(0)
-            .focus(|s| s.border_color(rgb(theme::ACCENT)))
+            .focus(|s| s.border_color(rgb(theme::BORDER_FOCUS)))
             .cursor_pointer()
-            .hover(move |s| s.bg(rgb(if primary { 0xb0efd6 } else { theme::HOVER })))
+            .hover(move |s| s.bg(rgb(if primary { theme::ACCENT_HOVER } else { theme::HOVER })))
             .child(label)
             .on_click(cx.listener(move |this, _, window, cx| action(this, window, cx)))
             .on_key_down(cx.listener(move |this, event: &KeyDownEvent, window, cx| {
@@ -454,59 +454,129 @@ impl Render for EnvironmentView {
                 .child(
                     div()
                         .flex()
-                        .gap_2()
+                        .gap_3()
+                        .px_2()
+                        .py_1p5()
+                        .rounded_sm()
+                        .bg(rgb(theme::SURFACE))
+                        .text_size(px(11.))
+                        .font_weight(FontWeight::BOLD)
                         .text_color(rgb(theme::MUTED))
-                        .children(
-                            ["Key / type", "Default", "Current", "Description"]
-                                .map(|text| div().flex_1().child(text)),
-                        )
-                        .child(div().w(px(52.))),
+                        .child(div().w(px(180.)).child("VARIABLE KEY"))
+                        .child(div().w(px(110.)).child("TYPE"))
+                        .child(div().flex_1().child("INITIAL / DEFAULT"))
+                        .child(div().flex_1().child("CURRENT (LOCAL)"))
+                        .child(div().flex_1().child("DESCRIPTION"))
+                        .child(div().w(px(60.)).child("ACTION")),
                 );
             if rows.is_empty() {
-                body = body.child("No variables yet. Add a key and its default value.");
+                body = body.child(
+                    div()
+                        .p_6()
+                        .text_center()
+                        .text_color(rgb(theme::MUTED))
+                        .child("No variables configured yet. Click 'Add variable' above to declare one."),
+                );
             }
             for row in rows {
                 let key = row.key.clone();
-                let label = format!(
-                    "{} · {:?}{}{}",
-                    row.key,
-                    row.value_type,
-                    if row.is_secret { " · secret" } else { "" },
-                    if row.enabled { "" } else { " · disabled" }
-                );
+                let is_sec = row.is_secret;
+                let kind = row.value_type;
+                let en = row.enabled;
+
+                let default_display = if is_sec && !row.default_value.is_empty() {
+                    "••••••••".to_string()
+                } else if row.default_value.is_empty() {
+                    "-".to_string()
+                } else {
+                    row.default_value
+                };
+
+                let current_display = if is_sec && row.current_value.is_some() {
+                    "••••••••".to_string()
+                } else {
+                    row.current_value.unwrap_or_else(|| "default".into())
+                };
+
                 body = body.child(
                     div()
                         .id(SharedString::from(format!("row-{key}")))
                         .flex()
-                        .gap_2()
+                        .items_center()
+                        .gap_3()
+                        .px_2()
                         .py_2()
+                        .rounded_md()
                         .border_b_1()
-                        .border_color(rgb(theme::BORDER))
-                        .child(div().flex_1().min_w_0().child(label))
-                        .child(div().flex_1().min_w_0().child(row.default_value))
+                        .border_color(rgb(theme::BORDER_SUBTLE))
+                        .hover(|s| s.bg(rgb(theme::HOVER)))
                         .child(
                             div()
-                                .flex_1()
+                                .w(px(180.))
                                 .min_w_0()
-                                .child(row.current_value.unwrap_or_else(|| "Use default".into())),
+                                .font_family(super::typography::MONO_FONT)
+                                .font_weight(FontWeight::BOLD)
+                                .text_size(px(12.))
+                                .text_color(rgb(if en { theme::TEXT } else { theme::MUTED }))
+                                .child(key.clone()),
+                        )
+                        .child(
+                            div()
+                                .w(px(110.))
+                                .child(
+                                    div()
+                                        .px_1p5()
+                                        .py(px(0.5))
+                                        .rounded_sm()
+                                        .bg(rgb(if is_sec { theme::WARNING_BG } else { theme::SURFACE_ELEVATED }))
+                                        .text_color(rgb(if is_sec { theme::WARNING } else { theme::TEXT_SECONDARY }))
+                                        .font_family(super::typography::MONO_FONT)
+                                        .text_size(px(10.))
+                                        .font_weight(FontWeight::BOLD)
+                                        .child(format!("{:?}{}", kind, if is_sec { "🔒" } else { "" })),
+                                ),
                         )
                         .child(
                             div()
                                 .flex_1()
                                 .min_w_0()
+                                .font_family(super::typography::MONO_FONT)
+                                .text_size(px(11.5))
+                                .text_color(rgb(theme::TEXT_SECONDARY))
+                                .child(default_display),
+                        )
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .font_family(super::typography::MONO_FONT)
+                                .text_size(px(11.5))
+                                .text_color(rgb(theme::ACCENT_LIGHT))
+                                .child(current_display),
+                        )
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .text_size(px(12.))
+                                .text_color(rgb(theme::MUTED))
                                 .child(row.description.unwrap_or_default()),
                         )
                         .child(
-                            self.button(format!("edit-{key}"), "Edit", cx, move |s, _, cx| {
-                                let entry = s
-                                    .ws()
-                                    .environments
-                                    .get(id)
-                                    .ok()
-                                    .and_then(|d| d.variables.iter().find(|v| v.key == key))
-                                    .cloned();
-                                s.edit(entry, cx);
-                            }),
+                            div()
+                                .w(px(60.))
+                                .child(
+                                    self.button(format!("edit-{key}"), "Edit ✎", cx, move |s, _, cx| {
+                                        let entry = s
+                                            .ws()
+                                            .environments
+                                            .get(id)
+                                            .ok()
+                                            .and_then(|d| d.variables.iter().find(|v| v.key == key))
+                                            .cloned();
+                                        s.edit(entry, cx);
+                                    }),
+                                ),
                         ),
                 );
             }
@@ -519,20 +589,67 @@ impl Render for EnvironmentView {
             let kind = editor.kind;
             let secret = editor.secret;
             let enabled = editor.enabled;
-            let mut panel = div().flex().flex_col().gap_2().p_3().bg(rgb(theme::SIDEBAR))
-                .child("Edit variable — Save commits shared fields; Apply current commits only the local override.")
-                .child("Key").child(key).child("Initial/default value (blank preserves an existing secret reference)").child(default)
-                .child(self.button("clear-default", "Clear default", cx, |s, _, cx| { if let Some(e) = &mut s.editor { e.preserve_default = false; e.default.update(cx, |v, _| v.reset()); } cx.notify(); }))
-                .child("Description").child(description)
-                .child(div().flex().flex_wrap().gap_2()
-                    .child(self.button("type", format!("Type: {kind:?} (change)"), cx, |s, _, cx| { if let Some(e) = &mut s.editor { e.kind = match e.kind { VariableType::String => VariableType::Number, VariableType::Number => VariableType::Boolean, VariableType::Boolean => VariableType::Json, VariableType::Json => VariableType::SecretReference, VariableType::SecretReference => VariableType::String }; let mask = e.secret || e.kind == VariableType::SecretReference; e.default.update(cx, |v, _| v.password = mask); e.current.update(cx, |v, _| v.password = mask); } cx.notify(); }))
-                    .child(self.button("secret", format!("Secret: {secret}"), cx, |s, _, cx| { if let Some(e) = &mut s.editor { e.secret = !e.secret; let mask = e.secret || e.kind == VariableType::SecretReference; e.default.update(cx, |v, _| v.password = mask); e.current.update(cx, |v, _| v.password = mask); } cx.notify(); }))
-                    .child(self.button("enabled", format!("Enabled: {enabled}"), cx, |s, _, cx| { if let Some(e) = &mut s.editor { e.enabled = !e.enabled; } cx.notify(); })))
-                .child(div().flex().gap_2().child(self.button("save-row", "Save variable", cx, |s, _, cx| s.save_row(cx)))
-                    .child(self.button("cancel-row", "Cancel editor", cx, |s, _, cx| { s.editor = None; cx.notify(); })))
-                .child("Current/local value").child(current)
-                .child(div().flex().gap_2().child(self.button("set-current", "Apply current", cx, |s, _, cx| s.current(false, cx)))
-                    .child(self.button("reset-current", "Use default", cx, |s, _, cx| s.current(true, cx))));
+            let mut panel = div()
+                .flex()
+                .flex_col()
+                .gap_3()
+                .p_4()
+                .rounded_lg()
+                .bg(rgb(theme::SURFACE_ELEVATED))
+                .border_1()
+                .border_color(rgb(theme::BORDER_FOCUS))
+                .child(
+                    div()
+                        .font_weight(FontWeight::BOLD)
+                        .text_size(px(13.))
+                        .text_color(rgb(theme::TEXT))
+                        .child("Edit Variable Configuration"),
+                )
+                .child(
+                    div()
+                        .text_size(px(11.5))
+                        .text_color(rgb(theme::MUTED))
+                        .child("Shared defaults travel with your workspace repository. Secret current values remain in your local session."),
+                )
+                .child(div().text_size(px(11.)).font_weight(FontWeight::BOLD).text_color(rgb(theme::MUTED)).child("VARIABLE KEY"))
+                .child(key)
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .child(div().text_size(px(11.)).font_weight(FontWeight::BOLD).text_color(rgb(theme::MUTED)).child("SHARED DEFAULT VALUE"))
+                        .child(self.button("clear-default", "Clear default", cx, |s, _, cx| { if let Some(e) = &mut s.editor { e.preserve_default = false; e.default.update(cx, |v, _| v.reset()); } cx.notify(); })),
+                )
+                .child(default)
+                .child(div().text_size(px(11.)).font_weight(FontWeight::BOLD).text_color(rgb(theme::MUTED)).child("DESCRIPTION"))
+                .child(description)
+                .child(
+                    div()
+                        .flex()
+                        .flex_wrap()
+                        .gap_2()
+                        .child(self.button("type", format!("Type: {kind:?} ↻"), cx, |s, _, cx| { if let Some(e) = &mut s.editor { e.kind = match e.kind { VariableType::String => VariableType::Number, VariableType::Number => VariableType::Boolean, VariableType::Boolean => VariableType::Json, VariableType::Json => VariableType::SecretReference, VariableType::SecretReference => VariableType::String }; let mask = e.secret || e.kind == VariableType::SecretReference; e.default.update(cx, |v, _| v.password = mask); e.current.update(cx, |v, _| v.password = mask); } cx.notify(); }))
+                        .child(self.button("secret", format!("Secret: {secret}"), cx, |s, _, cx| { if let Some(e) = &mut s.editor { e.secret = !e.secret; let mask = e.secret || e.kind == VariableType::SecretReference; e.default.update(cx, |v, _| v.password = mask); e.current.update(cx, |v, _| v.password = mask); } cx.notify(); }))
+                        .child(self.button("enabled", format!("Enabled: {enabled}"), cx, |s, _, cx| { if let Some(e) = &mut s.editor { e.enabled = !e.enabled; } cx.notify(); })),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .gap_2()
+                        .pt_1()
+                        .child(self.button("save-row", "Save Variable", cx, |s, _, cx| s.save_row(cx)))
+                        .child(self.button("cancel-row", "Cancel", cx, |s, _, cx| { s.editor = None; cx.notify(); })),
+                )
+                .child(div().text_size(px(11.)).font_weight(FontWeight::BOLD).text_color(rgb(theme::MUTED)).child("LOCAL SESSION OVERRIDE (CURRENT VALUE)"))
+                .child(current)
+                .child(
+                    div()
+                        .flex()
+                        .gap_2()
+                        .child(self.button("set-current", "Apply Local Override", cx, |s, _, cx| s.current(false, cx)))
+                        .child(self.button("reset-current", "Use Shared Default", cx, |s, _, cx| s.current(true, cx))),
+                );
             if let Some(key) = self.editor.as_ref().and_then(|e| e.old_key.clone()) {
                 panel = panel.child(self.button(
                     "remove-variable",

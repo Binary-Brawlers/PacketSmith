@@ -30,4 +30,9 @@ pub mod workbench_view;
 mod typography;
 
 #[cfg(feature = "gpui-ui")]
-mod theme;
+pub mod components;
+#[cfg(feature = "gpui-ui")]
+pub mod theme;
+#[cfg(feature = "gpui-ui")]
+pub mod icons;
+

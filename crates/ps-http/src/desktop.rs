@@ -104,7 +104,7 @@ pub async fn send_desktop_request(
         headers
             .entry(key.to_string())
             .and_modify(|v: &mut String| {
-                v.push_str("\n");
+                v.push('\n');
                 v.push_str(&safe);
             })
             .or_insert(safe);

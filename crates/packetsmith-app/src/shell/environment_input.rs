@@ -34,7 +34,11 @@ actions!(
 );
 
 pub(super) struct TextInput {
-    pub(super) password: bool,
+    pub(crate) password: bool,
+    pub(crate) mono: bool,
+    pub(crate) compact: bool,
+    pub(crate) prefix: Option<SharedString>,
+    pub(crate) has_error: bool,
     focus_handle: FocusHandle,
     content: SharedString,
     placeholder: SharedString,
@@ -566,7 +570,7 @@ impl Element for TextElement {
                         point(bounds.left() + cursor_pos, bounds.top()),
                         size(px(2.), bounds.bottom() - bounds.top()),
                     ),
-                    gpui::blue(),
+                    rgb(theme::ACCENT),
                 )),
             )
         } else {
@@ -584,7 +588,7 @@ impl Element for TextElement {
                             bounds.bottom(),
                         ),
                     ),
-                    rgba(0x91e3c240),
+                    rgba(0x6366f140),
                 )),
                 None,
             )
@@ -643,10 +647,26 @@ impl Element for TextElement {
 
 impl Render for TextInput {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        div()
+        let (height, padding_y, text_size) = if self.compact {
+            (px(28.), px(2.), px(12.))
+        } else {
+            (px(34.), px(4.), px(13.))
+        };
+        let font_family = if self.mono {
+            super::typography::MONO_FONT
+        } else {
+            super::typography::UI_FONT
+        };
+        let border_color = if self.has_error {
+            theme::DANGER
+        } else {
+            theme::BORDER
+        };
+
+        let mut root = div()
             .id("native-input")
-            .font_family(super::typography::UI_FONT)
-            .text_size(px(14.))
+            .font_family(font_family)
+            .text_size(text_size)
             .text_color(rgb(theme::TEXT))
             .role(if self.password {
                 gpui::Role::PasswordInput
@@ -655,6 +675,7 @@ impl Render for TextInput {
             })
             .aria_label(self.placeholder.clone())
             .flex()
+            .items_center()
             .key_context("TextInput")
             .track_focus(&self.focus_handle(cx))
             .tab_index(0)
@@ -680,19 +701,33 @@ impl Render for TextInput {
             .overflow_hidden()
             .rounded_md()
             .border_1()
-            .border_color(rgb(theme::BORDER))
-            .focus(|style| style.border_color(rgb(theme::ACCENT)))
+            .border_color(rgb(border_color))
+            .hover(move |s| s.border_color(rgb(if border_color == theme::DANGER { theme::DANGER } else { 0x3d4760 })))
+            .focus(|style| style.border_color(rgb(theme::BORDER_FOCUS)))
             .bg(rgb(theme::SURFACE))
-            .line_height(px(30.))
-            .text_size(px(13.))
-            .child(
+            .h(height);
+
+        if let Some(ref prefix) = self.prefix {
+            root = root.child(
                 div()
-                    .h(px(30. + 4. * 2.))
-                    .w_full()
-                    .p(px(4.))
-                    .bg(rgb(theme::SURFACE))
-                    .child(TextElement { input: cx.entity() }),
-            )
+                    .px_2()
+                    .py_1()
+                    .text_size(px(11.))
+                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                    .text_color(rgb(theme::MUTED))
+                    .child(prefix.clone()),
+            );
+        }
+
+        root.child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .px_2()
+                .py(padding_y)
+                .bg(rgb(theme::SURFACE))
+                .child(TextElement { input: cx.entity() }),
+        )
     }
 }
 
@@ -711,6 +746,10 @@ impl TextInput {
     ) -> Self {
         Self {
             password,
+            mono: false,
+            compact: false,
+            prefix: None,
+            has_error: false,
             focus_handle: cx.focus_handle(),
             content: value.to_owned().into(),
             placeholder: placeholder.to_owned().into(),
@@ -723,6 +762,34 @@ impl TextInput {
             horizontal_offset: px(0.),
         }
     }
+
+    pub(super) fn mono(mut self) -> Self {
+        self.mono = true;
+        self
+    }
+
+    pub(super) fn compact(mut self) -> Self {
+        self.compact = true;
+        self
+    }
+
+    #[allow(dead_code)]
+    pub(super) fn with_prefix(mut self, prefix: impl Into<SharedString>) -> Self {
+        self.prefix = Some(prefix.into());
+        self
+    }
+
+    #[allow(dead_code)]
+    pub(super) fn with_error(mut self, has_error: bool) -> Self {
+        self.has_error = has_error;
+        self
+    }
+
+    pub(super) fn set_text(&mut self, text: impl Into<SharedString>) {
+        self.content = text.into();
+        self.selected_range = self.content.len()..self.content.len();
+    }
+
     pub(super) fn value(&self) -> String {
         self.content.to_string()
     }
