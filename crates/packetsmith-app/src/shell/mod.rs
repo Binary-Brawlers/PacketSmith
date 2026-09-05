@@ -28,3 +28,6 @@ pub mod environment_view;
 pub mod workbench_view;
 #[cfg(feature = "gpui-ui")]
 mod typography;
+
+#[cfg(feature = "gpui-ui")]
+mod theme;

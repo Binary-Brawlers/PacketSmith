@@ -1,6 +1,7 @@
 //! Native text input adapted from the Apache-2.0 GPUI input example at Zed v1.18.0.
 //! Copyright 2022–2025 Zed Industries, Inc. Modifications: PacketSmith contributors.
 //! See docs/third-party-notices.md and the repository Apache-2.0 LICENSE.
+use super::theme;
 use std::ops::Range;
 
 use gpui::{
@@ -495,7 +496,7 @@ impl Element for TextElement {
         let style = window.text_style();
 
         let (display_text, text_color) = if content.is_empty() {
-            (input.placeholder.clone(), rgb(0xa1a1aa).into())
+            (input.placeholder.clone(), rgb(theme::MUTED).into())
         } else {
             (
                 if input.password {
@@ -583,7 +584,7 @@ impl Element for TextElement {
                             bounds.bottom(),
                         ),
                     ),
-                    rgba(0x3311ff30),
+                    rgba(0x91e3c240),
                 )),
                 None,
             )
@@ -646,7 +647,7 @@ impl Render for TextInput {
             .id("native-input")
             .font_family(super::typography::UI_FONT)
             .text_size(px(14.))
-            .text_color(rgb(0xf4f4f5))
+            .text_color(rgb(theme::TEXT))
             .role(if self.password {
                 gpui::Role::PasswordInput
             } else {
@@ -677,10 +678,11 @@ impl Render for TextInput {
             .on_mouse_move(cx.listener(Self::on_mouse_move))
             .w_full()
             .overflow_hidden()
+            .rounded_md()
             .border_1()
-            .border_color(rgb(0x3f3f46))
-            .focus(|style| style.border_color(rgb(0x818cf8)))
-            .bg(rgb(0x27272a))
+            .border_color(rgb(theme::BORDER))
+            .focus(|style| style.border_color(rgb(theme::ACCENT)))
+            .bg(rgb(theme::SURFACE))
             .line_height(px(30.))
             .text_size(px(13.))
             .child(
@@ -688,7 +690,7 @@ impl Render for TextInput {
                     .h(px(30. + 4. * 2.))
                     .w_full()
                     .p(px(4.))
-                    .bg(rgb(0x27272a))
+                    .bg(rgb(theme::SURFACE))
                     .child(TextElement { input: cx.entity() }),
             )
     }

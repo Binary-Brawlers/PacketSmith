@@ -1,4 +1,5 @@
 //! Native environment workspace: selector, variable table, editor and comparison.
+use super::theme;
 use super::{
     environment_input::{self, TextInput},
     AppState, WorkspaceState,
@@ -30,6 +31,8 @@ pub struct EnvironmentView {
     compare: Option<ResourceId>,
     deleting: Option<ResourceId>,
     message: String,
+    show_transfer: bool,
+    show_comparison: bool,
 }
 
 impl std::fmt::Debug for EnvironmentView {
@@ -77,6 +80,8 @@ impl EnvironmentView {
             compare: None,
             deleting: None,
             message,
+            show_transfer: false,
+            show_comparison: false,
         }
     }
 
@@ -294,24 +299,55 @@ impl EnvironmentView {
         cx: &mut Context<Self>,
         action: impl Fn(&mut Self, &mut Window, &mut Context<Self>) + 'static,
     ) -> impl IntoElement {
+        let id: SharedString = id.into();
+        let primary = matches!(
+            id.as_ref(),
+            "create" | "save-row" | "add-variable" | "open-workspace"
+        );
+        let danger = matches!(id.as_ref(), "delete" | "confirm-delete" | "remove-variable");
+        let selected = self
+            .ws()
+            .active_environment_id
+            .is_some_and(|active| id.as_ref() == format!("env-{active}"))
+            || (id.as_ref() == "none" && self.ws().active_environment_id.is_none());
         let label: SharedString = label.into();
         let action = std::rc::Rc::new(action);
         let keyboard_action = action.clone();
         div()
-            .id(id.into())
+            .id(id)
             .role(Role::Button)
             .aria_label(label.clone())
             .px_3()
-            .py_1()
+            .py_2()
             .rounded_md()
-            .bg(rgb(0x27272a))
+            .bg(rgb(if primary {
+                theme::ACCENT
+            } else if selected {
+                theme::HOVER
+            } else {
+                theme::SIDEBAR
+            }))
+            .text_size(px(12.))
+            .text_color(rgb(if primary {
+                theme::INK
+            } else if danger {
+                theme::DANGER
+            } else {
+                theme::TEXT
+            }))
             .border_1()
-            .border_color(rgb(0x3f3f46))
+            .border_color(rgb(if primary {
+                theme::ACCENT
+            } else if selected {
+                theme::BORDER
+            } else {
+                theme::SIDEBAR
+            }))
             .focusable()
             .tab_index(0)
-            .focus(|s| s.border_color(rgb(0x818cf8)))
+            .focus(|s| s.border_color(rgb(theme::ACCENT)))
             .cursor_pointer()
-            .hover(|s| s.bg(rgb(0x3f3f46)))
+            .hover(move |s| s.bg(rgb(if primary { 0xb0efd6 } else { theme::HOVER })))
             .child(label)
             .on_click(cx.listener(move |this, _, window, cx| action(this, window, cx)))
             .on_key_down(cx.listener(move |this, event: &KeyDownEvent, window, cx| {
@@ -334,15 +370,22 @@ impl Render for EnvironmentView {
             .collect();
         let active = self.ws().active_environment_id;
         let mut sidebar = div()
-            .w(px(220.))
+            .w(px(248.))
+            .bg(rgb(theme::SIDEBAR))
             .flex_none()
             .flex()
             .flex_col()
             .gap_2()
             .p_4()
             .border_r_1()
-            .border_color(rgb(0x3f3f46))
-            .child(div().text_lg().child("Environments"))
+            .border_color(rgb(theme::BORDER))
+            .child(
+                div()
+                    .pb_3()
+                    .text_size(px(11.))
+                    .text_color(rgb(theme::MUTED))
+                    .child("ENVIRONMENTS"),
+            )
             .child(self.button(
                 "none",
                 if active.is_none() {
@@ -362,9 +405,9 @@ impl Render for EnvironmentView {
                 move |s, _, cx| s.switch(Some(id), cx),
             ));
         }
-        let mut body = div().id("environment-body").flex_1().min_w_0().overflow_y_scroll().p_4().flex().flex_col().gap_3()
-            .child(div().text_xl().child("Environment variables"))
-            .child(div().text_color(rgb(0xa1a1aa)).child("Shared defaults travel with your workspace. Secret current values stay in this session."))
+        let mut body = div().id("environment-body").flex_1().min_w_0().overflow_y_scroll().p_6().flex().flex_col().gap_4()
+            .child(div().text_size(px(24.)).font_weight(FontWeight::SEMIBOLD).child("Environment variables"))
+            .child(div().text_color(rgb(theme::MUTED)).child("Shared defaults travel with your workspace. Secret current values stay in this session."))
             .child(self.name.clone())
             .child(div().flex().flex_wrap().gap_2()
                 .child(self.button("create", "Create", cx, |s, _, cx| {
@@ -375,7 +418,7 @@ impl Render for EnvironmentView {
                 .child(self.button("rename", "Rename", cx, |s, _, cx| {
                     if let Ok(id) = s.selected() { let name = s.name.read(cx).value(); let result = s.ws_mut().rename_environment(id, &name); s.report(result, "Environment renamed.", cx); } else { s.message = "Select an environment to rename.".into(); cx.notify(); }
                 }))
-                .child(self.button("clone", "Duplicate / clone", cx, |s, _, cx| {
+                .child(self.button("clone", "Duplicate", cx, |s, _, cx| {
                     if !s.can_leave(cx) { return; }
                     if let Ok(id) = s.selected() { let name = s.name.read(cx).value(); let result = s.ws_mut().clone_environment(id, &format!("{name} copy")); s.report(result, "Cloned shared defaults; local values were excluded.", cx); s.sync_name(cx); } else { s.message = "Select an environment to clone.".into(); cx.notify(); }
                 }))
@@ -409,10 +452,15 @@ impl Render for EnvironmentView {
                     s.edit(None, cx)
                 }))
                 .child(
-                    div().flex().gap_2().text_color(rgb(0xa1a1aa)).children(
-                        ["Key / type", "Default", "Current", "Description"]
-                            .map(|text| div().flex_1().child(text)),
-                    ),
+                    div()
+                        .flex()
+                        .gap_2()
+                        .text_color(rgb(theme::MUTED))
+                        .children(
+                            ["Key / type", "Default", "Current", "Description"]
+                                .map(|text| div().flex_1().child(text)),
+                        )
+                        .child(div().w(px(52.))),
                 );
             if rows.is_empty() {
                 body = body.child("No variables yet. Add a key and its default value.");
@@ -433,7 +481,7 @@ impl Render for EnvironmentView {
                         .gap_2()
                         .py_2()
                         .border_b_1()
-                        .border_color(rgb(0x3f3f46))
+                        .border_color(rgb(theme::BORDER))
                         .child(div().flex_1().min_w_0().child(label))
                         .child(div().flex_1().min_w_0().child(row.default_value))
                         .child(
@@ -471,7 +519,7 @@ impl Render for EnvironmentView {
             let kind = editor.kind;
             let secret = editor.secret;
             let enabled = editor.enabled;
-            let mut panel = div().flex().flex_col().gap_2().p_3().bg(rgb(0x202024))
+            let mut panel = div().flex().flex_col().gap_2().p_3().bg(rgb(theme::SIDEBAR))
                 .child("Edit variable — Save commits shared fields; Apply current commits only the local override.")
                 .child("Key").child(key).child("Initial/default value (blank preserves an existing secret reference)").child(default)
                 .child(self.button("clear-default", "Clear default", cx, |s, _, cx| { if let Some(e) = &mut s.editor { e.preserve_default = false; e.default.update(cx, |v, _| v.reset()); } cx.notify(); }))
@@ -503,7 +551,28 @@ impl Render for EnvironmentView {
             }
             body = body.child(panel);
         }
-        body = body.child(div().text_lg().child("Import / export native YAML")).child(self.transfer_path.clone())
+        body = body.child(
+            div()
+                .mt_4()
+                .pt_4()
+                .border_t_1()
+                .border_color(rgb(theme::BORDER))
+                .child(self.button(
+                    "toggle-transfer",
+                    if self.show_transfer {
+                        "↓  Import & export"
+                    } else {
+                        "→  Import & export"
+                    },
+                    cx,
+                    |s, _, cx| {
+                        s.show_transfer = !s.show_transfer;
+                        cx.notify();
+                    },
+                )),
+        );
+        if self.show_transfer {
+            body = body.child(div().text_lg().child("Import / export native YAML")).child(self.transfer_path.clone())
             .child(div().flex().gap_2()
                 .child(self.button("import", "Import file", cx, |s, _, cx| {
                     if !s.can_leave(cx) { return; }
@@ -521,59 +590,81 @@ impl Render for EnvironmentView {
                             .map_err(str::to_owned)
                     })(); s.report(result, "Exported shared defaults without local overrides or raw secrets.", cx);
                 })));
-        body = body.child(div().text_lg().child("Compare / check production values"))
-            .child("Select a reference. The active environment is the target; enabled reference keys are required.");
-        let mut comparison = div().flex().flex_wrap().gap_2();
-        for (id, name) in docs {
-            comparison = comparison.child(self.button(
-                format!("compare-{id}"),
-                format!(
-                    "{}{}",
-                    if self.compare == Some(id) { "● " } else { "" },
-                    name
-                ),
-                cx,
-                move |s, _, cx| {
-                    s.compare = Some(id);
-                    cx.notify();
-                },
-            ));
         }
-        body = body.child(comparison);
-        if let (Some(target), Some(reference)) = (active, self.compare) {
-            if let Ok(differences) = self.ws().environments.diff(reference, target) {
-                body = body.child(format!(
-                    "{} differences (secret contents are not compared)",
-                    differences.len()
+        body = body.child(
+            div()
+                .pt_4()
+                .border_t_1()
+                .border_color(rgb(theme::BORDER))
+                .child(self.button(
+                    "toggle-comparison",
+                    if self.show_comparison {
+                        "↓  Compare environments"
+                    } else {
+                        "→  Compare environments"
+                    },
+                    cx,
+                    |s, _, cx| {
+                        s.show_comparison = !s.show_comparison;
+                        cx.notify();
+                    },
+                )),
+        );
+        if self.show_comparison {
+            body = body.child(div().text_lg().child("Compare / check production values"))
+            .child("Select a reference. The active environment is the target; enabled reference keys are required.");
+            let mut comparison = div().flex().flex_wrap().gap_2();
+            for (id, name) in docs {
+                comparison = comparison.child(self.button(
+                    format!("compare-{id}"),
+                    format!(
+                        "{}{}",
+                        if self.compare == Some(id) { "● " } else { "" },
+                        name
+                    ),
+                    cx,
+                    move |s, _, cx| {
+                        s.compare = Some(id);
+                        cx.notify();
+                    },
                 ));
-                for difference in differences {
-                    let display = |row: Option<ps_workspace::EnvironmentRow>| {
-                        row.map(|r| {
-                            format!(
-                                "default={} · current={} · {:?} · enabled={} · secret={} · {}",
-                                r.default_value,
-                                r.current_value.unwrap_or_else(|| "Use default".into()),
-                                r.value_type,
-                                r.enabled,
-                                r.is_secret,
-                                r.description.unwrap_or_default()
-                            )
-                        })
-                        .unwrap_or_else(|| "Absent".into())
-                    };
+            }
+            body = body.child(comparison);
+            if let (Some(target), Some(reference)) = (active, self.compare) {
+                if let Ok(differences) = self.ws().environments.diff(reference, target) {
                     body = body.child(format!(
-                        "{}: reference [{}] → target [{}]",
-                        difference.key,
-                        display(difference.left),
-                        display(difference.right)
+                        "{} differences (secret contents are not compared)",
+                        differences.len()
                     ));
-                }
-                if let Ok(missing) = self
-                    .ws()
-                    .environments
-                    .missing_values_against(target, reference)
-                {
-                    body = body.child(if missing.is_empty() { "No missing literal values. Vault availability and unresolved templates are checked separately.".into() } else { format!("Missing production values: {}", missing.join(", ")) });
+                    for difference in differences {
+                        let display = |row: Option<ps_workspace::EnvironmentRow>| {
+                            row.map(|r| {
+                                format!(
+                                    "default={} · current={} · {:?} · enabled={} · secret={} · {}",
+                                    r.default_value,
+                                    r.current_value.unwrap_or_else(|| "Use default".into()),
+                                    r.value_type,
+                                    r.enabled,
+                                    r.is_secret,
+                                    r.description.unwrap_or_default()
+                                )
+                            })
+                            .unwrap_or_else(|| "Absent".into())
+                        };
+                        body = body.child(format!(
+                            "{}: reference [{}] → target [{}]",
+                            difference.key,
+                            display(difference.left),
+                            display(difference.right)
+                        ));
+                    }
+                    if let Ok(missing) = self
+                        .ws()
+                        .environments
+                        .missing_values_against(target, reference)
+                    {
+                        body = body.child(if missing.is_empty() { "No missing literal values. Vault availability and unresolved templates are checked separately.".into() } else { format!("Missing production values: {}", missing.join(", ")) });
+                    }
                 }
             }
         }
@@ -581,10 +672,10 @@ impl Render for EnvironmentView {
             .size_full()
             .flex()
             .flex_col()
-            .bg(rgb(0x18181b))
-            .text_color(rgb(0xf4f4f5))
+            .bg(rgb(theme::CANVAS))
+            .text_color(rgb(theme::TEXT))
             .font_family(super::typography::UI_FONT)
-            .text_size(px(14.))
+            .text_size(px(13.))
             .key_context("Environments")
             .track_focus(&self.focus)
             .tab_group()
@@ -607,8 +698,8 @@ impl Render for EnvironmentView {
                     .gap_3()
                     .p_3()
                     .border_b_1()
-                    .border_color(rgb(0x3f3f46))
-                    .child("PacketSmith")
+                    .border_color(rgb(theme::BORDER))
+                    .child(div().text_color(rgb(theme::MUTED)).child("Workspace"))
                     .child(format!(
                         "Active: {}",
                         self.selected()
@@ -658,11 +749,10 @@ impl Render for EnvironmentView {
                 div()
                     .p_3()
                     .border_t_1()
-                    .border_color(rgb(0x3f3f46))
-                    .child(format!(
-                        "{}   |   Quick switch: Cmd/Ctrl+Shift+E",
-                        self.message
-                    )),
+                    .border_color(rgb(theme::BORDER))
+                    .text_size(px(11.))
+                    .text_color(rgb(theme::MUTED))
+                    .child(self.message.clone()),
             )
     }
 }

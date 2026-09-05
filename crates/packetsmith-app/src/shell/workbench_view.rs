@@ -1,4 +1,5 @@
 //! Native HTTP workbench. Drafts and responses remain in memory for this slice.
+use super::theme;
 use super::{environment_input::TextInput, environment_view::EnvironmentView, AppState};
 use gpui::{
     div, prelude::*, px, rgb, App, Context, Entity, FocusHandle, Focusable, KeyDownEvent, Role,
@@ -40,6 +41,7 @@ pub struct WorkbenchView {
     active: usize,
     next_id: usize,
     headers_tab: bool,
+    request_body_tab: bool,
     runtime: tokio::runtime::Handle,
 }
 
@@ -84,6 +86,7 @@ impl WorkbenchView {
             active: 0,
             next_id: 1,
             headers_tab: false,
+            request_body_tab: false,
             runtime: tokio::runtime::Handle::current(),
         };
         view.add_draft("Untitled request".into(), "GET", "", cx);
@@ -202,11 +205,22 @@ impl WorkbenchView {
         cx: &mut Context<Self>,
         action: impl Fn(&mut Self, &mut Window, &mut Context<Self>) + 'static,
     ) -> impl IntoElement {
+        let id: SharedString = id.into();
+        let selected = match id.as_ref() {
+            "requests" => !self.show_environments,
+            "environments" => self.show_environments,
+            "request-headers" => !self.request_body_tab,
+            "request-body" => self.request_body_tab,
+            "response-body" => !self.headers_tab,
+            "response-headers" => self.headers_tab,
+            _ => id.as_ref() == format!("tab-{}", self.drafts[self.active].id),
+        };
+        let primary = id.as_ref() == "send";
         let label = label.into();
         let action = std::rc::Rc::new(action);
         let keyboard = action.clone();
         div()
-            .id(id.into())
+            .id(id)
             .role(Role::Button)
             .aria_label(label.clone())
             .focusable()
@@ -215,11 +229,31 @@ impl WorkbenchView {
             .py_2()
             .rounded_md()
             .cursor_pointer()
-            .bg(rgb(0x27272a))
+            .bg(rgb(if primary {
+                theme::ACCENT
+            } else if selected {
+                theme::HOVER
+            } else {
+                theme::SIDEBAR
+            }))
+            .text_color(rgb(if primary {
+                theme::INK
+            } else if selected {
+                theme::TEXT
+            } else {
+                theme::MUTED
+            }))
+            .text_size(px(12.))
             .border_1()
-            .border_color(rgb(0x3f3f46))
-            .hover(|s| s.bg(rgb(0x3f3f46)))
-            .focus(|s| s.border_color(rgb(0x818cf8)))
+            .border_color(rgb(if selected {
+                theme::BORDER
+            } else if primary {
+                theme::ACCENT
+            } else {
+                theme::SIDEBAR
+            }))
+            .hover(move |s| s.bg(rgb(if primary { 0xb0efd6 } else { theme::HOVER })))
+            .focus(|s| s.border_color(rgb(theme::ACCENT)))
             .child(label)
             .on_click(cx.listener(move |view, _, window, cx| action(view, window, cx)))
             .on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
@@ -260,10 +294,10 @@ impl Render for WorkbenchView {
             .size_full()
             .flex()
             .flex_col()
-            .bg(rgb(0x18181b))
-            .text_color(rgb(0xf4f4f5))
+            .bg(rgb(theme::CANVAS))
+            .text_color(rgb(theme::TEXT))
             .font_family(super::typography::UI_FONT)
-            .text_size(px(14.))
+            .text_size(px(13.))
             .track_focus(&self.focus)
             .key_context("RequestWorkbench")
             .on_action(cx.listener(|s, _: &SendRequest, _, cx| {
@@ -287,13 +321,28 @@ impl Render for WorkbenchView {
             }))
             .child(
                 div()
+                    .h(px(58.))
+                    .flex_shrink_0()
                     .flex()
                     .items_center()
+                    .px_5()
                     .gap_3()
-                    .p_3()
+                    .bg(rgb(theme::SIDEBAR))
                     .border_b_1()
-                    .border_color(rgb(0x3f3f46))
-                    .child(div().text_lg().child("PacketSmith"))
+                    .border_color(rgb(theme::BORDER))
+                    .child(
+                        div()
+                            .text_size(px(21.))
+                            .text_color(rgb(theme::ACCENT))
+                            .child("⟐"),
+                    )
+                    .child(
+                        div()
+                            .w(px(164.))
+                            .text_size(px(17.))
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                            .child("PacketSmith"),
+                    )
                     .child(self.button("requests", "Requests", cx, |s, _, cx| {
                         s.show_environments = false;
                         cx.notify();
@@ -304,77 +353,167 @@ impl Render for WorkbenchView {
                     }))
                     .child(div().flex_1())
                     .child(
-                        self.button("active-environment", environment, cx, |s, _, cx| {
+                        div()
+                            .text_size(px(11.))
+                            .text_color(rgb(theme::MUTED))
+                            .child("ENVIRONMENT"),
+                    )
+                    .child(self.button(
+                        "active-environment",
+                        format!("{environment}  ↓"),
+                        cx,
+                        |s, _, cx| {
                             s.show_environments = true;
                             cx.notify();
-                        }),
-                    ),
+                        },
+                    )),
             );
         if self.show_environments {
             return root.child(div().flex_1().min_h_0().child(self.environments.clone()));
         }
         let mut sidebar = div()
-            .id("saved-requests")
-            .w(px(230.))
+            .w(px(248.))
             .flex_shrink_0()
-            .p_3()
             .flex()
             .flex_col()
-            .gap_2()
+            .bg(rgb(theme::SIDEBAR))
             .border_r_1()
-            .border_color(rgb(0x3f3f46))
+            .border_color(rgb(theme::BORDER))
+            .child(
+                div()
+                    .px_4()
+                    .pt_5()
+                    .pb_3()
+                    .text_size(px(11.))
+                    .text_color(rgb(theme::MUTED))
+                    .child("WORKSPACE"),
+            )
+            .child(div().px_3().child(self.button(
+                "new-request",
+                "+  New request",
+                cx,
+                |s, _, cx| s.add_draft("Untitled request".into(), "GET", "", cx),
+            )))
+            .child(
+                div()
+                    .px_4()
+                    .pt_6()
+                    .pb_3()
+                    .flex()
+                    .justify_between()
+                    .child("Collections")
+                    .child(
+                        div()
+                            .text_color(rgb(theme::MUTED))
+                            .child(saved.len().to_string()),
+                    ),
+            );
+        let mut library = div()
+            .id("saved-requests")
+            .flex_1()
+            .min_h_0()
             .overflow_y_scroll()
-            .child(div().text_color(rgb(0xa1a1aa)).child("WORKSPACE REQUESTS"))
-            .child(self.button("new-request", "+ New request", cx, |s, _, cx| {
-                s.add_draft("Untitled request".into(), "GET", "", cx)
-            }));
+            .px_3()
+            .flex()
+            .flex_col()
+            .gap_1();
         if saved.is_empty() {
-            sidebar = sidebar.child(div().mt_3().text_color(rgb(0xa1a1aa)).child("No saved HTTP requests. Open a workspace from Environments, or start a new request."));
+            library = library.child(
+                div()
+                    .px_1()
+                    .py_4()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .child(
+                        div()
+                            .text_color(rgb(theme::TEXT))
+                            .child("Your requests live here"),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(12.))
+                            .text_color(rgb(theme::MUTED))
+                            .child("Open a workspace to browse saved requests."),
+                    )
+                    .child(
+                        self.button("open-library", "Open workspace  →", cx, |s, _, cx| {
+                            s.show_environments = true;
+                            cx.notify();
+                        }),
+                    ),
+            );
         }
         for (index, (name, method, url)) in saved.into_iter().enumerate() {
-            sidebar = sidebar.child(self.button(
+            library = library.child(self.button(
                 format!("saved-{index}"),
-                format!("{method}  {name}"),
+                format!("{method}   {name}"),
                 cx,
                 move |s, _, cx| s.add_draft(name.clone(), &method, &url, cx),
             ));
         }
+        sidebar = sidebar.child(library).child(
+            div()
+                .p_4()
+                .border_t_1()
+                .border_color(rgb(theme::BORDER))
+                .flex()
+                .flex_col()
+                .gap_1()
+                .text_size(px(11.))
+                .text_color(rgb(theme::MUTED))
+                .child("LOCAL WORKSPACE")
+                .child("Drafts stay in this session"),
+        );
         let mut tabs = div()
             .id("request-tabs")
             .flex()
-            .gap_2()
-            .p_3()
+            .items_center()
+            .gap_1()
+            .px_3()
+            .py_2()
+            .flex_shrink_0()
+            .bg(rgb(theme::SIDEBAR))
+            .border_b_1()
+            .border_color(rgb(theme::BORDER))
             .overflow_x_scroll();
         for (index, draft) in self.drafts.iter().enumerate() {
-            let label = format!(
-                "{}{}",
-                if index == self.active { "● " } else { "" },
-                draft.title
-            );
-            tabs =
-                tabs.child(
-                    self.button(format!("tab-{}", draft.id), label, cx, move |s, _, cx| {
-                        s.active = index;
-                        cx.notify();
-                    }),
-                );
+            tabs = tabs.child(self.button(
+                format!("tab-{}", draft.id),
+                format!("{}   {}", draft.method.read(cx).value(), draft.title),
+                cx,
+                move |s, _, cx| {
+                    s.active = index;
+                    cx.notify();
+                },
+            ));
         }
+        tabs = tabs.child(self.button("add-tab", "+", cx, |s, _, cx| {
+            s.add_draft("Untitled request".into(), "GET", "", cx)
+        }));
         let draft = &self.drafts[self.active];
-        let mut editor = div()
-            .id("request-editor")
+        let composer = div()
+            .px_6()
+            .pt_5()
+            .pb_4()
             .flex()
             .flex_col()
-            .gap_3()
-            .p_4()
-            .overflow_y_scroll()
-            .max_h(px(340.))
+            .gap_4()
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(div().text_color(rgb(theme::MUTED)).child("Requests  /"))
+                    .child(draft.title.clone()),
+            )
             .child(
                 div()
                     .flex()
                     .gap_2()
                     .items_center()
-                    .child(div().w(px(105.)).child(draft.method.clone()))
-                    .child(div().flex_1().child(draft.url.clone()))
+                    .child(div().w(px(94.)).flex_shrink_0().child(draft.method.clone()))
+                    .child(div().flex_1().min_w_0().child(draft.url.clone()))
                     .child(if draft.running.is_some() {
                         self.button("cancel", "Cancel", cx, |s, _, cx| {
                             let draft = &mut s.drafts[s.active];
@@ -386,89 +525,160 @@ impl Render for WorkbenchView {
                         })
                         .into_any_element()
                     } else {
-                        self.button("send", "Send request", cx, |s, _, cx| s.send(cx))
+                        self.button("send", "Send  ↗", cx, |s, _, cx| s.send(cx))
                             .into_any_element()
                     }),
-            )
+            );
+        let mut editor = div()
+            .id("request-editor")
+            .h(px(210.))
+            .flex_shrink_0()
+            .flex()
+            .flex_col()
             .child(
                 div()
+                    .px_6()
+                    .pb_2()
                     .flex()
-                    .gap_2()
                     .items_center()
-                    .child("Headers")
-                    .child(self.button("add-header", "+ Add header", cx, |s, _, cx| {
-                        let row = (input("", "Header name", cx), input("", "Header value", cx));
-                        s.drafts[s.active].headers.push(row);
-                        cx.notify();
-                    })),
-            );
-        for (index, (name, value)) in draft.headers.iter().enumerate() {
-            editor = editor.child(
-                div()
-                    .flex()
                     .gap_2()
-                    .child(div().w(px(210.)).child(name.clone()))
-                    .child(div().flex_1().child(value.clone()))
                     .child(self.button(
-                        format!("remove-header-{index}"),
-                        "Remove",
-                        cx,
-                        move |s, _, cx| {
-                            s.drafts[s.active].headers.remove(index);
-                            cx.notify();
-                        },
-                    )),
-            );
-        }
-        editor = editor
-            .child(
-                div()
-                    .flex()
-                    .gap_2()
-                    .items_center()
-                    .child("Body")
-                    .child(self.button(
-                        "body-mode",
-                        if draft.json { "JSON" } else { "Raw text" },
+                        "request-headers",
+                        format!("Headers  {}", draft.headers.len()),
                         cx,
                         |s, _, cx| {
-                            s.drafts[s.active].json = !s.drafts[s.active].json;
+                            s.request_body_tab = false;
                             cx.notify();
                         },
-                    )),
-            )
-            .child(draft.body.clone());
+                    ))
+                    .child(self.button("request-body", "Body", cx, |s, _, cx| {
+                        s.request_body_tab = true;
+                        cx.notify();
+                    }))
+                    .child(div().flex_1())
+                    .child(
+                        div()
+                            .text_size(px(11.))
+                            .text_color(rgb(theme::MUTED))
+                            .child("⌘ / Ctrl + Enter to send"),
+                    ),
+            );
+        let mut fields = div()
+            .id("request-fields")
+            .flex_1()
+            .min_h_0()
+            .overflow_y_scroll()
+            .px_6()
+            .py_3()
+            .flex()
+            .flex_col()
+            .gap_2();
+        if self.request_body_tab {
+            fields = fields
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .child(div().text_color(rgb(theme::MUTED)).child("Request body"))
+                        .child(self.button(
+                            "body-mode",
+                            if draft.json {
+                                "JSON  ↻"
+                            } else {
+                                "Raw text  ↻"
+                            },
+                            cx,
+                            |s, _, cx| {
+                                s.drafts[s.active].json = !s.drafts[s.active].json;
+                                cx.notify();
+                            },
+                        )),
+                )
+                .child(draft.body.clone());
+        } else {
+            fields = fields.child(
+                div()
+                    .flex()
+                    .text_size(px(11.))
+                    .text_color(rgb(theme::MUTED))
+                    .child(div().w(px(210.)).child("HEADER"))
+                    .child(div().flex_1().child("VALUE")),
+            );
+            for (index, (name, value)) in draft.headers.iter().enumerate() {
+                fields = fields.child(
+                    div()
+                        .flex()
+                        .gap_2()
+                        .child(div().w(px(202.)).child(name.clone()))
+                        .child(div().flex_1().min_w_0().child(value.clone()))
+                        .child(self.button(
+                            format!("remove-header-{index}"),
+                            "Remove",
+                            cx,
+                            move |s, _, cx| {
+                                s.drafts[s.active].headers.remove(index);
+                                cx.notify();
+                            },
+                        )),
+                );
+            }
+            if draft.headers.is_empty() {
+                fields = fields.child(
+                    div()
+                        .py_2()
+                        .text_color(rgb(theme::MUTED))
+                        .child("No custom headers. Add a header to configure your request."),
+                );
+            }
+            fields = fields.child(div().flex().child(self.button(
+                "add-header",
+                "+  Add header",
+                cx,
+                |s, _, cx| {
+                    let row = (input("", "Header name", cx), input("", "Header value", cx));
+                    s.drafts[s.active].headers.push(row);
+                    cx.notify();
+                },
+            )));
+        }
+        editor = editor.child(fields);
         let response = draft.response.as_ref();
-        let headers = response
-            .map(|r| {
-                let mut rows = r
-                    .headers
-                    .iter()
-                    .map(|(k, v)| format!("{k}: {v}"))
-                    .collect::<Vec<_>>();
-                rows.sort();
-                rows.join("\n")
-            })
-            .unwrap_or_default();
         let body = if self.headers_tab {
-            headers
+            response
+                .map(|r| {
+                    let mut rows = r
+                        .headers
+                        .iter()
+                        .map(|(k, v)| format!("{k}: {v}"))
+                        .collect::<Vec<_>>();
+                    rows.sort();
+                    rows.join("\n")
+                })
+                .unwrap_or_default()
         } else {
             draft.response_text.clone()
         };
-        let response_panel = div()
+        let mut response_panel = div()
             .flex()
             .flex_col()
             .flex_1()
             .min_h_0()
             .border_t_1()
-            .border_color(rgb(0x3f3f46))
+            .border_color(rgb(theme::BORDER))
             .child(
                 div()
+                    .px_6()
+                    .py_3()
                     .flex()
                     .items_center()
                     .gap_2()
-                    .p_3()
-                    .child("Response")
+                    .child(
+                        div()
+                            .mr_3()
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                            .child("Response"),
+                    )
                     .child(self.button("response-body", "Body", cx, |s, _, cx| {
                         s.headers_tab = false;
                         cx.notify();
@@ -478,40 +688,82 @@ impl Render for WorkbenchView {
                         cx.notify();
                     }))
                     .child(div().flex_1())
-                    .child(
-                        self.button("copy-response", "Copy response", cx, |s, _, cx| {
-                            if let Some(response) = &s.drafts[s.active].response {
-                                cx.write_to_clipboard(gpui::ClipboardItem::new_string(
-                                    String::from_utf8_lossy(&response.body_bytes).into_owned(),
-                                ));
-                            }
-                        }),
-                    ),
-            )
-            .child(
-                div()
-                    .px_4()
-                    .pb_3()
-                    .text_color(rgb(0xa1a1aa))
-                    .child(draft.message.clone()),
-            )
-            .child(
-                div()
-                    .id("response-content")
-                    .flex_1()
-                    .min_h_0()
-                    .overflow_y_scroll()
-                    .p_4()
-                    .child(if response.is_some() {
-                        if body.is_empty() {
+                    .when(response.is_some(), |el| {
+                        el.child(
+                            self.button("copy-response", "Copy response", cx, |s, _, cx| {
+                                if let Some(response) = &s.drafts[s.active].response {
+                                    cx.write_to_clipboard(gpui::ClipboardItem::new_string(
+                                        String::from_utf8_lossy(&response.body_bytes).into_owned(),
+                                    ));
+                                }
+                            }),
+                        )
+                    }),
+            );
+        if let Some(response) = response {
+            response_panel = response_panel
+                .child(
+                    div()
+                        .px_6()
+                        .pb_3()
+                        .text_size(px(12.))
+                        .text_color(rgb(if response.status_code < 400 {
+                            theme::ACCENT
+                        } else {
+                            theme::DANGER
+                        }))
+                        .child(draft.message.clone()),
+                )
+                .child(
+                    div()
+                        .id("response-content")
+                        .flex_1()
+                        .min_h_0()
+                        .overflow_y_scroll()
+                        .px_6()
+                        .pb_4()
+                        .font_family(super::typography::MONO_FONT)
+                        .text_size(px(12.))
+                        .child(if body.is_empty() {
                             "Empty response".into()
                         } else {
                             body
-                        }
+                        }),
+                );
+        } else {
+            response_panel = response_panel.child(
+                div()
+                    .flex_1()
+                    .flex()
+                    .flex_col()
+                    .items_center()
+                    .justify_center()
+                    .gap_3()
+                    .p_6()
+                    .child(
+                        div()
+                            .text_size(px(32.))
+                            .text_color(rgb(theme::ACCENT))
+                            .child(if draft.running.is_some() {
+                                "↗"
+                            } else {
+                                "↔"
+                            }),
+                    )
+                    .child(div().text_size(px(16.)).child(if draft.running.is_some() {
+                        "Waiting for a response"
                     } else {
-                        "Enter a URL and send a request to see the response here.".into()
-                    }),
+                        "Ready when you are"
+                    }))
+                    .child(div().text_color(rgb(theme::MUTED)).child(
+                        if draft.message == "Ready to send" {
+                            "Enter a URL above, then send your request.".into()
+                        } else {
+                            draft.message.clone()
+                        },
+                    )),
             );
+        }
         root.child(
             div().flex().flex_1().min_h_0().child(sidebar).child(
                 div()
@@ -520,23 +772,31 @@ impl Render for WorkbenchView {
                     .flex_1()
                     .min_w_0()
                     .child(tabs)
+                    .child(composer)
                     .child(editor)
                     .child(response_panel),
             ),
         )
         .child(
             div()
+                .h(px(30.))
+                .flex_shrink_0()
                 .px_4()
-                .py_2()
+                .flex()
+                .items_center()
+                .gap_2()
                 .border_t_1()
-                .border_color(rgb(0x3f3f46))
-                .text_color(rgb(0xa1a1aa))
-                .child(
-                    "Drafts are session-only · Response limit: 2 MiB · Redirects are not followed",
-                ),
+                .border_color(rgb(theme::BORDER))
+                .text_size(px(11.))
+                .text_color(rgb(theme::MUTED))
+                .child(div().text_color(rgb(theme::ACCENT)).child("●"))
+                .child("Local session")
+                .child(div().flex_1())
+                .child(format!("{} open requests", self.drafts.len())),
         )
     }
 }
+
 impl Focusable for WorkbenchView {
     fn focus_handle(&self, _: &App) -> FocusHandle {
         self.focus.clone()
