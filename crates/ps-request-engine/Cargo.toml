@@ -9,6 +9,7 @@ description = "Protocol-independent execution engine and lifecycle hooks for Pac
 
 [dependencies]
 ps-domain = { workspace = true }
+ps-variable = { workspace = true }
 async-trait = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }

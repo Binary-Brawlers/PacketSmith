@@ -9,6 +9,7 @@ use chrono::Utc;
 use ps_domain::{ProtocolRequest, RequestDocument};
 use ps_request_engine::{
     EventSink, ExecutionContext, ExecutionError, ExecutionEvent, ExecutionSummary, ProtocolExecutor,
+    ResolutionResult,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -200,6 +201,10 @@ impl HttpExecutor {
     }
 }
 
+fn resolve_request_url(ctx: &ExecutionContext, raw_url: &str) -> ResolutionResult {
+    ctx.variable_resolver.resolve_template(raw_url)
+}
+
 #[async_trait]
 impl ProtocolExecutor for HttpExecutor {
     async fn execute(
@@ -225,11 +230,7 @@ impl ProtocolExecutor for HttpExecutor {
             })
             .await;
 
-        let resolver = ps_request_engine::VariableResolver::new()
-            .with_globals((*ctx.variables).clone())
-            .with_vault((*ctx.secrets).clone());
-
-        let resolved_url = resolver.interpolate(&http_payload.url);
+        let resolved_url = resolve_request_url(ctx, &http_payload.url);
 
         if ctx.cancellation_token.is_cancelled() {
             event_sink
@@ -243,7 +244,8 @@ impl ProtocolExecutor for HttpExecutor {
         let start = Instant::now();
         event_sink
             .emit(ExecutionEvent::Connecting {
-                url: resolved_url.clone(),
+                // Event sinks feed logs and UI. Always use the redacted preview.
+                url: resolved_url.display_value.clone(),
                 timestamp: Utc::now(),
             })
             .await;
@@ -253,7 +255,7 @@ impl ProtocolExecutor for HttpExecutor {
             Err(_) => reqwest::Method::GET,
         };
 
-        let response_res = self.client.request(method, &resolved_url).send().await;
+        let response_res = self.client.request(method, &resolved_url.value).send().await;
 
         match response_res {
             Ok(resp) => {
@@ -351,5 +353,22 @@ mod tests {
 
         let url = req.build_resolved_url().expect("Failed to build URL");
         assert_eq!(url.as_str(), "https://api.example.com/v1/users?limit=20");
+    }
+
+    #[test]
+    fn test_resolved_url_has_a_secret_safe_event_value() {
+        let context = ExecutionContext::new(
+            HashMap::new(),
+            HashMap::from([("token".into(), "do-not-log".into())]),
+        );
+        let resolved = resolve_request_url(
+            &context,
+            "https://api.example.com?token={{vault:token}}",
+        );
+
+        assert!(resolved.value.contains("do-not-log"));
+        assert!(!resolved.display_value.contains("do-not-log"));
+        assert!(!format!("{resolved:?}").contains("do-not-log"));
+        assert!(!format!("{context:?}").contains("do-not-log"));
     }
 }

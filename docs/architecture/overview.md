@@ -16,6 +16,10 @@ PacketSmith is a modular, local-first API development platform engineered in Rus
 │   RequestDocument | ProtocolRequest | Auth | ResourceId     │
 │                     (crates/ps-domain)                      │
 ├─────────────────────────────────────────────────────────────┤
+│              Variables & Template Resolution               │
+│       Scopes | Provenance | Redaction | Dynamic Values      │
+│                    (crates/ps-variable)                     │
+├─────────────────────────────────────────────────────────────┤
 │                     Protocol Engines                        │
 │            HTTP (crates/ps-http) | Future: gRPC, WS...       │
 ├─────────────────────────────────────────────────────────────┤

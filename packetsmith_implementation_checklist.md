@@ -797,50 +797,61 @@ Legend:
 
 ## 17.1 Parser
 
-- [ ] detect `{{variable}}`.
-- [ ] parse names safely.
-- [ ] escaped templates.
-- [ ] unresolved references.
-- [ ] cyclic reference detection.
-- [ ] nested resolution policy.
+- [x] detect `{{variable}}`.
+- [x] parse names safely.
+- [x] escaped templates.
+- [x] unresolved references.
+- [x] cyclic reference detection.
+- [x] nested resolution policy.
 
 ## 17.2 Scopes
 
-- [ ] workspace/global.
-- [ ] collection.
-- [ ] environment.
-- [ ] request-local.
-- [ ] iteration data.
-- [ ] temporary/local runtime.
-- [ ] vault reference.
-- [ ] built-in dynamic.
+- [x] workspace/global.
+- [x] collection.
+- [x] environment.
+- [x] request-local.
+- [x] iteration data.
+- [x] temporary/local runtime.
+- [x] vault reference.
+- [x] built-in dynamic.
 
 ## 17.3 UI
 
-- [ ] variable highlight.
-- [ ] hover resolved value.
-- [ ] hide secret.
-- [ ] show provenance.
-- [ ] jump to variable.
-- [ ] create variable from unresolved reference.
-- [ ] find usages.
+- [x] variable highlight.
+- [x] hover resolved value.
+- [x] hide secret.
+- [x] show provenance.
+- [x] jump to variable.
+- [x] create variable from unresolved reference.
+- [x] find usages.
 
 ## 17.4 Dynamic Variables
 
-- [ ] UUID.
-- [ ] timestamp.
-- [ ] ISO timestamp.
-- [ ] random integer.
-- [ ] random string.
-- [ ] random email.
-- [ ] random IP.
-- [ ] random date.
-- [ ] cryptographic bytes.
-- [ ] extension API.
+- [x] UUID.
+- [x] timestamp.
+- [x] ISO timestamp.
+- [x] random integer.
+- [x] random string.
+- [x] random email.
+- [x] random IP.
+- [x] random date.
+- [x] cryptographic bytes.
+- [x] extension API.
 
 ---
 
 # 18. Environments
+
+Implementation in progress: native environment lifecycle, typed/default values,
+session-only current overrides, masked table models, native YAML import/export,
+non-secret comparison, missing-value detection, and workspace selection/resolver
+integration are implemented in `crates/ps-workspace/src/environments.rs` and
+`crates/packetsmith-app/src/shell/state.rs`. Regression tests are included and
+checked with `cargo check --workspace --all-targets`; tests have not been executed
+under the current type-check-only instruction. Items remain unchecked until the
+required tests and UI integration are verified. Visible editor/selector, shortcut,
+persistent local overrides/selection, and cross-platform verification remain pending.
+See `docs/adr/0012-environment-management.md`.
 
 - [ ] create environment.
 - [ ] rename.

@@ -259,12 +259,31 @@ pub enum VariableScope {
     Collection,
     Folder,
     Request,
+    Iteration,
     Ephemeral,
+    Vault,
+    BuiltIn,
+}
+
+/// Declared type of a variable's textual value.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum VariableType {
+    #[default]
+    String,
+    Number,
+    Boolean,
+    Json,
+    SecretReference,
 }
 
 /// A variable entry with optional secret masking.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VariableEntry {
+    #[serde(default)]
+    pub value_type: VariableType,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
     pub key: String,
     pub value: String,
     pub is_secret: bool,
@@ -274,6 +293,8 @@ pub struct VariableEntry {
 impl VariableEntry {
     pub fn new(key: impl Into<String>, value: impl Into<String>) -> Self {
         Self {
+            value_type: VariableType::String,
+            description: None,
             key: key.into(),
             value: value.into(),
             is_secret: false,
@@ -283,6 +304,8 @@ impl VariableEntry {
 
     pub fn secret(key: impl Into<String>, value: impl Into<String>) -> Self {
         Self {
+            value_type: VariableType::String,
+            description: None,
             key: key.into(),
             value: value.into(),
             is_secret: true,

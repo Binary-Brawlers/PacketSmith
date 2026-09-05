@@ -228,6 +228,29 @@ impl CommandRegistry {
                 .with_description("Split current active pane vertically")
                 .with_keybinding(KeyBinding::primary("\\")),
         );
+
+        self.register_descriptor(
+            CommandDescriptor::new(
+                "variable.jump_to_definition",
+                "Go to Variable Definition",
+                "Variables",
+            )
+            .with_description("Open the source that defines the variable under the cursor"),
+        );
+
+        self.register_descriptor(
+            CommandDescriptor::new("variable.find_usages", "Find Variable Usages", "Variables")
+                .with_description("Find references to the variable across the active workspace"),
+        );
+
+        self.register_descriptor(
+            CommandDescriptor::new(
+                "variable.create_from_reference",
+                "Create Variable from Reference",
+                "Variables",
+            )
+            .with_description("Create a scoped value for an unresolved variable reference"),
+        );
     }
 
     /// Registers a command descriptor without an action handler (useful for menu UI).

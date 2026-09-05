@@ -15,6 +15,9 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+pub mod environments;
+pub use environments::{EnvironmentManager, EnvironmentError, EnvironmentRow, EnvironmentDifference};
+
 pub mod collection_manager;
 pub mod tree;
 
@@ -37,6 +40,8 @@ pub const CURRENT_SCHEMA_VERSION: &str = "1.0.0";
 
 #[derive(Error, Debug)]
 pub enum WorkspaceError {
+    #[error("Invalid environment: {0}")]
+    InvalidEnvironment(String),
     #[error("Manifest file not found at {0}")]
     NotFound(PathBuf),
     #[error("I/O error: {0}")]

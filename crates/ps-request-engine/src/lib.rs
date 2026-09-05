@@ -101,26 +101,50 @@ impl Default for CancellationToken {
 }
 
 /// Context provided to protocol executors during execution.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ExecutionContext {
     pub run_id: ResourceId,
+    /// Flat compatibility view used by callers that have not adopted scoped values yet.
     pub variables: Arc<HashMap<String, String>>,
     pub secrets: Arc<HashMap<String, String>>,
+    /// Complete scoped resolver shared by every protocol executor.
+    pub variable_resolver: Arc<VariableResolver>,
     pub cancellation_token: CancellationToken,
+}
+
+impl std::fmt::Debug for ExecutionContext {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ExecutionContext")
+            .field("run_id", &self.run_id)
+            .field("variable_count", &self.variables.len())
+            .field("secret_count", &self.secrets.len())
+            .field("variable_resolver", &self.variable_resolver)
+            .field("cancellation_token", &self.cancellation_token)
+            .finish()
+    }
 }
 
 impl ExecutionContext {
     pub fn new(variables: HashMap<String, String>, secrets: HashMap<String, String>) -> Self {
+        let variable_resolver = VariableResolver::new()
+            .with_globals(variables.clone())
+            .with_vault(secrets.clone());
         Self {
             run_id: ResourceId::new(),
             variables: Arc::new(variables),
             secrets: Arc::new(secrets),
+            variable_resolver: Arc::new(variable_resolver),
             cancellation_token: CancellationToken::default(),
         }
     }
 
     pub fn with_cancellation(mut self, token: CancellationToken) -> Self {
         self.cancellation_token = token;
+        self
+    }
+
+    pub fn with_variable_resolver(mut self, resolver: VariableResolver) -> Self {
+        self.variable_resolver = Arc::new(resolver);
         self
     }
 }

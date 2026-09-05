@@ -10,6 +10,7 @@ use ps_storage::CacheStorage;
 use crate::shell::notifications::NotificationManager;
 use crate::shell::shutdown::ShutdownCoordinator;
 use crate::shell::window::{WindowManager, WindowState};
+use crate::shell::variables::VariableUiController;
 
 /// Master application state root.
 #[derive(Debug)]
@@ -53,26 +54,78 @@ pub struct WorkspaceState {
     pub workbench: WorkbenchState,
     pub collection_manager: Option<CollectionManager>,
     pub resource_tree: Option<ResourceTree>,
+    pub variable_ui: VariableUiController,
+    pub environments: ps_workspace::EnvironmentManager,
 }
 
 impl WorkspaceState {
     pub fn new(path: PathBuf, name: impl Into<String>) -> Self {
         Self {
+            environments: ps_workspace::EnvironmentManager::new(path.clone()),
             workspace_path: path,
             workspace_name: name.into(),
             active_environment_id: None,
             workbench: WorkbenchState::new(),
             collection_manager: None,
             resource_tree: None,
+            variable_ui: VariableUiController::default(),
         }
     }
 
     /// Scans the workspace directory, initializes CollectionManager and builds the ResourceTree.
     pub fn scan_resources(&mut self) -> Result<(), ps_workspace::WorkspaceError> {
         let manager = CollectionManager::scan(&self.workspace_path)?;
+        let environments = ps_workspace::EnvironmentManager::scan(&self.workspace_path)
+            .map_err(|error| ps_workspace::WorkspaceError::InvalidEnvironment(error.to_string()))?;
         let tree = ResourceTree::from_manager(&manager);
+        self.environments = environments;
+        if self.active_environment_id.is_some_and(|id| self.environments.get(id).is_err()) {
+            self.active_environment_id = None;
+        }
+        self.refresh_environment_variables()
+            .map_err(|error| ps_workspace::WorkspaceError::InvalidEnvironment(error.to_string()))?;
         self.resource_tree = Some(tree);
         self.collection_manager = Some(manager);
+        Ok(())
+    }
+
+    /// Select an environment atomically; None restores the lower-priority scopes.
+    pub fn select_environment(&mut self, id: Option<ResourceId>) -> Result<(), ps_workspace::EnvironmentError> {
+        if let Some(id) = id { self.environments.get(id)?; }
+        self.active_environment_id = id;
+        self.refresh_environment_variables()
+    }
+
+    pub fn save_environment(&mut self, doc: ps_domain::EnvironmentDocument) -> Result<(), ps_workspace::EnvironmentError> {
+        self.environments.save(doc)?;
+        self.refresh_environment_variables()
+    }
+
+    pub fn set_environment_current(&mut self, id: ResourceId, key: &str, value: Option<String>) -> Result<(), ps_workspace::EnvironmentError> {
+        self.environments.set_current(id, key, value)?;
+        self.refresh_environment_variables()
+    }
+
+    pub fn delete_environment(&mut self, id: ResourceId) -> Result<(), ps_workspace::EnvironmentError> {
+        self.environments.delete(id)?;
+        if self.active_environment_id == Some(id) { self.active_environment_id = None; }
+        self.refresh_environment_variables()
+    }
+
+    /// Refresh after editing defaults or local overrides, and before execution.
+    pub fn refresh_environment_variables(&mut self) -> Result<(), ps_workspace::EnvironmentError> {
+        let entries = if let Some(id) = self.active_environment_id {
+            let doc = self.environments.get(id)?;
+            let source = ps_variable::VariableSource::new(ps_domain::VariableScope::Environment, doc.name.clone()).with_resource_id(id);
+            self.environments.effective_variables(id)?.into_iter().map(|v| {
+                let secret = v.is_secret || v.value_type == ps_domain::VariableType::SecretReference;
+                let definition = ps_variable::VariableDefinition::new(v.key, v.value, source.clone());
+                if secret { definition.secret() } else { definition }
+            }).collect::<Vec<_>>()
+        } else { Vec::new() };
+        let resolver = self.variable_ui.resolver_mut();
+        resolver.clear_scope(ps_domain::VariableScope::Environment);
+        for definition in entries { resolver.insert(ps_domain::VariableScope::Environment, definition); }
         Ok(())
     }
 
@@ -147,6 +200,30 @@ impl RequestTabState {
 mod tests {
     use super::*;
     use ps_domain::{HttpRequestPayload, ProtocolRequest};
+
+    #[test]
+    fn environment_switch_clears_stale_values_and_preserves_globals() {
+        let path = std::env::temp_dir().join(format!("ps-env-state-{}", ResourceId::new()));
+        let mut ws = WorkspaceState::new(path.clone(), "Workspace");
+        let a = ws.environments.create("A").unwrap();
+        let b = ws.environments.create("B").unwrap();
+        let mut doc = ws.environments.get(a).unwrap().clone();
+        doc.variables.push(ps_domain::VariableEntry::new("host", "environment"));
+        ws.save_environment(doc).unwrap();
+        ws.variable_ui.resolver_mut().insert(ps_domain::VariableScope::Global,
+            ps_variable::VariableDefinition::new("host", "global", ps_variable::VariableSource::new(ps_domain::VariableScope::Global, "Workspace")));
+        ws.select_environment(Some(a)).unwrap();
+        assert_eq!(ws.variable_ui.resolver().resolve_var("host").as_deref(), Some("environment"));
+        ws.set_environment_current(a, "host", Some("local".into())).unwrap();
+        assert_eq!(ws.variable_ui.resolver().resolve_var("host").as_deref(), Some("local"));
+        assert!(ws.select_environment(Some(ResourceId::new())).is_err());
+        assert_eq!(ws.active_environment_id, Some(a));
+        ws.select_environment(Some(b)).unwrap();
+        assert_eq!(ws.variable_ui.resolver().resolve_var("host").as_deref(), Some("global"));
+        ws.delete_environment(b).unwrap();
+        assert_eq!(ws.active_environment_id, None);
+        std::fs::remove_dir_all(path).unwrap();
+    }
 
     #[test]
     fn test_workspace_tab_lifecycle() {
