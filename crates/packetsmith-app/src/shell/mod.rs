@@ -17,3 +17,9 @@ pub use variables::{
 };
 pub use window::{WindowManager, WindowState};
 pub use workbench::{CloseTabError, ClosedTabInfo, SplitTree, WorkbenchPane, WorkbenchState};
+
+pub mod environments;
+#[cfg(feature = "gpui-ui")]
+mod environment_input;
+#[cfg(feature = "gpui-ui")]
+pub mod environment_view;

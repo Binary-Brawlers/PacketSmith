@@ -842,38 +842,37 @@ Legend:
 
 # 18. Environments
 
-Implementation in progress: native environment lifecycle, typed/default values,
-current overrides, masked table models, native YAML import/export,
-non-secret comparison, missing-value detection, and workspace selection/resolver
-integration are implemented in `crates/ps-workspace/src/environments.rs` and
-`crates/packetsmith-app/src/shell/state.rs`. Regression tests are included and
-checked with `cargo check --workspace --all-targets`; tests have not been executed
-under the current type-check-only instruction. Items remain unchecked until the
-required tests and UI integration are verified. Visible editor/selector, shortcut,
-and cross-platform verification remain pending. Active selection and non-secret
-local overrides now persist in a versioned, Git-ignored local snapshot. Secret
-overrides remain session-only; rescans preserve compatible session overrides.
-Restart, secret exclusion, stale classification, and invalid snapshot regression
-tests are included (type-checked only).
-See `docs/adr/0012-environment-management.md`.
+Implementation is present for every item below, including the native GPUI screen
+in `crates/packetsmith-app/src/shell/environment_view.rs` and shared workflows in
+`crates/packetsmith-app/src/shell/environments.rs`. The desktop entry point opens
+this screen; it provides workspace loading, the environment selector/table, row
+editing, lifecycle controls, file import/export, comparison, and production checks.
 
-- [ ] create environment.
-- [ ] rename.
-- [ ] duplicate.
-- [ ] delete.
-- [ ] environment table.
-- [ ] initial/default value.
-- [ ] current/local value.
-- [ ] secret flag.
-- [ ] type.
-- [ ] description.
-- [ ] environment selector.
-- [ ] quick switch keyboard shortcut.
-- [ ] import.
-- [ ] export.
-- [ ] diff environments.
-- [ ] clone environment.
-- [ ] detect missing production values.
+Validation: `cargo check --workspace --all-targets --features packetsmith-app/gpui-ui`
+checks both the native screen and regression-test targets. Per the current user
+instruction, tests and the application have not been run. The checkboxes remain
+open solely for the checklist's runtime/UI and cross-platform verification gate;
+they do not indicate missing implementation. Secret current values remain
+session-only by design until Section 19 supplies secure vault storage.
+See `docs/adr/0012-environment-management.md` and `docs/testing/environments.md`.
+
+- [ ] create environment. — Implemented: named creation, immediate selection.
+- [ ] rename. — Implemented: stable identity and resolver provenance refresh.
+- [ ] duplicate. — Implemented: fresh identity; shared defaults only.
+- [ ] delete. — Implemented: confirmation, local cleanup, selection reset.
+- [ ] environment table. — Implemented: enabled state, type, masked values, description, row editor.
+- [ ] initial/default value. — Implemented: typed editing and explicit clearing.
+- [ ] current/local value. — Implemented: apply/reset; non-secret persistence; secret session overrides.
+- [ ] secret flag. — Implemented: masking, export exclusion, unsaved-classification guard.
+- [ ] type. — Implemented: string, number, boolean, JSON, secret reference with validation.
+- [ ] description. — Implemented: editing and table display.
+- [ ] environment selector. — Implemented: ordered sidebar, active header, No environment option.
+- [ ] quick switch keyboard shortcut. — Implemented: Cmd/Ctrl+Shift+E; Tab traversal and keyboard activation.
+- [ ] import. — Implemented: native YAML file import, validation, fresh ID, raw secret stripping.
+- [ ] export. — Implemented: native YAML to a new file; local values excluded; existing files preserved.
+- [ ] diff environments. — Implemented: reference/target comparison with masked values and metadata.
+- [ ] clone environment. — Implemented: shared duplicate/clone workflow with editable name.
+- [ ] detect missing production values. — Implemented: active target checked against enabled reference keys and its own empty values.
 
 ---
 

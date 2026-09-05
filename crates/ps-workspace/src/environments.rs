@@ -429,6 +429,21 @@ impl EnvironmentManager {
             .collect())
     }
 
+    /// Compare a target against enabled keys in a reference environment as well
+    /// as its own enabled keys. Returns names only, never credential contents.
+    pub fn missing_values_against(&self, target: ResourceId, reference: ResourceId) -> Result<Vec<String>, EnvironmentError> {
+        let effective = self.effective_variables(target)?;
+        let mut keys = self.missing_values(target)?;
+        for variable in self.get(reference)?.variables.iter().filter(|v| v.enabled) {
+            if !effective.iter().any(|v| v.key == variable.key && !v.value.trim().is_empty()) {
+                keys.push(variable.key.clone());
+            }
+        }
+        keys.sort();
+        keys.dedup();
+        Ok(keys)
+    }
+
     pub fn missing_values(&self, id: ResourceId) -> Result<Vec<String>, EnvironmentError> {
         Ok(self
             .effective_variables(id)?
@@ -511,6 +526,28 @@ mod tests {
         fn drop(&mut self) {
             let _ = fs::remove_dir_all(&self.0);
         }
+    }
+
+    #[test]
+    fn production_check_includes_absent_disabled_and_empty_reference_keys() {
+        let root = Fixture::new();
+        let mut manager = EnvironmentManager::new(&root.0);
+        let reference = manager.create("Development").unwrap();
+        let target = manager.create("Production").unwrap();
+        let mut doc = manager.get(reference).unwrap().clone();
+        doc.variables = vec![VariableEntry::new("host", "localhost"), VariableEntry::secret("token", ""), VariableEntry::new("absent", "required")];
+        manager.save(doc).unwrap();
+        let mut doc = manager.get(target).unwrap().clone();
+        let mut disabled = VariableEntry::new("host", "production");
+        disabled.enabled = false;
+        doc.variables = vec![disabled, VariableEntry::secret("token", ""), VariableEntry::new("empty", "")];
+        manager.save(doc).unwrap();
+        manager.set_current(target, "token", Some("private-production-token".into())).unwrap();
+        assert_eq!(manager.missing_values_against(target, reference).unwrap(), vec!["absent", "empty", "host"]);
+        let diff = format!("{:?}", manager.diff(reference, target).unwrap());
+        assert!(!diff.contains("private-production-token"));
+        let clone = manager.duplicate(target, "Clone").unwrap();
+        assert!(manager.effective_variables(clone).unwrap().iter().find(|v| v.key == "token").unwrap().value.is_empty());
     }
 
     #[test]

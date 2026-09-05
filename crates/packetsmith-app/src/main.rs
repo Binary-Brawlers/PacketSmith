@@ -68,43 +68,12 @@ fn launch_gpui(state: AppState) -> Result<()> {
     use gpui::{prelude::*, *};
     use gpui_platform::application;
 
-    struct PacketSmithAppView;
-
-    impl Render for PacketSmithAppView {
-        fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-            div()
-                .flex()
-                .flex_col()
-                .size_full()
-                .bg(rgb(0x18181b))
-                .text_color(rgb(0xf4f4f5))
-                .child(
-                    div()
-                        .h_8()
-                        .w_full()
-                        .px_4()
-                        .flex()
-                        .items_center()
-                        .border_b_1()
-                        .border_color(rgb(0x3f3f46))
-                        .child("PacketSmith — API Platform"),
-                )
-                .child(
-                    div()
-                        .flex_1()
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .child("Ready to craft requests"),
-                )
-        }
-    }
-
     let win_state = state.window_manager.state();
     let width = win_state.width;
     let height = win_state.height;
 
     application().run(move |cx: &mut App| {
+        crate::shell::environment_view::EnvironmentView::bind_keys(cx);
         let bounds = Bounds::centered(None, size(px(width), px(height)), cx);
         let options = WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(bounds)),
@@ -116,8 +85,10 @@ fn launch_gpui(state: AppState) -> Result<()> {
             ..Default::default()
         };
 
-        cx.open_window(options, |_, cx| {
-            cx.new(|_| PacketSmithAppView)
+        cx.open_window(options, |window, cx| {
+            let view = cx.new(|cx| crate::shell::environment_view::EnvironmentView::new(state, cx));
+            window.focus(&view.focus_handle(cx), cx);
+            view
         })
         .expect("Failed to open main window");
     });

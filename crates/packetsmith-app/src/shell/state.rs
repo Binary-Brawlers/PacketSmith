@@ -78,7 +78,7 @@ impl WorkspaceState {
         let mut environments = self.environments.clone();
         environments.reload()
             .map_err(|error| ps_workspace::WorkspaceError::InvalidEnvironment(error.to_string()))?;
-        let active = if self.collection_manager.is_none() {
+        let active = if self.collection_manager.is_none() && self.environments.list().is_empty() {
             environments.restore_local_state()
                 .map_err(|error| ps_workspace::WorkspaceError::InvalidEnvironment(error.to_string()))?
         } else { self.active_environment_id };
