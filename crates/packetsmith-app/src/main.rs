@@ -8,7 +8,7 @@ pub mod shell;
 use std::path::PathBuf;
 use anyhow::Result;
 use tracing::{info, Level};
-use tracing_subscriber::FmtSubscriber;
+use tracing_subscriber::{FmtSubscriber, util::SubscriberInitExt};
 use crate::shell::{AppState, WindowState};
 
 #[tokio::main]
@@ -17,7 +17,8 @@ async fn main() -> Result<()> {
     let subscriber = FmtSubscriber::builder()
         .with_max_level(Level::INFO)
         .finish();
-    tracing::subscriber::set_global_default(subscriber).ok();
+    // Include GPUI's log-facade font/renderer diagnostics in terminal output.
+    subscriber.try_init().ok();
 
     info!("Starting PacketSmith desktop platform v{}", env!("CARGO_PKG_VERSION"));
 
@@ -73,6 +74,8 @@ fn launch_gpui(state: AppState) -> Result<()> {
     let height = win_state.height;
 
     application().run(move |cx: &mut App| {
+        cx.activate(true);
+        crate::shell::workbench_view::WorkbenchView::bind_keys(cx);
         crate::shell::environment_view::EnvironmentView::bind_keys(cx);
         let bounds = Bounds::centered(None, size(px(width), px(height)), cx);
         let options = WindowOptions {
@@ -86,7 +89,7 @@ fn launch_gpui(state: AppState) -> Result<()> {
         };
 
         cx.open_window(options, |window, cx| {
-            let view = cx.new(|cx| crate::shell::environment_view::EnvironmentView::new(state, cx));
+            let view = cx.new(|cx| crate::shell::workbench_view::WorkbenchView::new(state, cx));
             window.focus(&view.focus_handle(cx), cx);
             view
         })

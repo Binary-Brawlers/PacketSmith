@@ -16,6 +16,7 @@ use thiserror::Error;
 use url::Url;
 
 pub mod client;
+pub mod desktop;
 pub mod response;
 pub mod url_sync;
 

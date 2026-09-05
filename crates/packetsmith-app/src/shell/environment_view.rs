@@ -88,7 +88,7 @@ impl EnvironmentView {
         ]);
     }
 
-    fn ws(&self) -> &WorkspaceState {
+    pub(super) fn ws(&self) -> &WorkspaceState {
         self.state
             .active_workspace
             .as_ref()
@@ -583,7 +583,8 @@ impl Render for EnvironmentView {
             .flex_col()
             .bg(rgb(0x18181b))
             .text_color(rgb(0xf4f4f5))
-            .text_size(px(13.))
+            .font_family(super::typography::UI_FONT)
+            .text_size(px(14.))
             .key_context("Environments")
             .track_focus(&self.focus)
             .tab_group()

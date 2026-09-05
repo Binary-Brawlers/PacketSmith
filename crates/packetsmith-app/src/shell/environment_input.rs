@@ -644,6 +644,9 @@ impl Render for TextInput {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         div()
             .id("native-input")
+            .font_family(super::typography::UI_FONT)
+            .text_size(px(14.))
+            .text_color(rgb(0xf4f4f5))
             .role(if self.password {
                 gpui::Role::PasswordInput
             } else {

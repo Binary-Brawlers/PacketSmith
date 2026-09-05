@@ -21,6 +21,7 @@ pub struct AppState {
     pub notification_manager: NotificationManager,
     pub shutdown_coordinator: ShutdownCoordinator,
     pub storage: Option<Arc<CacheStorage>>,
+    pub vault: Option<Arc<ps_vault::Vault<ps_vault::OsSecretStore>>>,
     pub active_workspace: Option<WorkspaceState>,
 }
 
@@ -33,11 +34,22 @@ impl AppState {
             notification_manager: NotificationManager::new(),
             shutdown_coordinator: ShutdownCoordinator::new(),
             storage: None,
+            vault: None,
             active_workspace: None,
         }
     }
 
+    /// Configure on workspace load using its stable manifest ID. Credential I/O
+    /// remains lazy and must be scheduled on the background runtime.
+    pub fn configure_vault(&mut self, workspace_id: ResourceId) -> Result<(), ps_vault::VaultError> {
+        self.vault = Some(Arc::new(ps_vault::Vault::new(
+            ps_vault::OsSecretStore::new(&workspace_id.to_string())?,
+        )));
+        Ok(())
+    }
+
     pub fn set_active_workspace(&mut self, path: PathBuf, name: impl Into<String>) {
+        self.vault = None;
         self.active_workspace = Some(WorkspaceState::new(path, name));
     }
 }

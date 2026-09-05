@@ -1,0 +1,25 @@
+[package]
+name = "ps-vault"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+ps-variable.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+url.workspace = true
+zeroize = { version = "1.8", features = ["serde"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "=3.6.3", features = ["apple-native"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+keyring = { version = "=3.6.3", features = ["windows-native"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "=3.6.3", features = ["sync-secret-service", "crypto-rust"] }
+
+[lints]
+workspace = true

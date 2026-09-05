@@ -12,6 +12,7 @@ ps-domain = { workspace = true }
 ps-workspace = { workspace = true }
 ps-storage = { workspace = true }
 ps-variable = { workspace = true }
+ps-vault = { workspace = true }
 ps-request-engine = { workspace = true }
 ps-http = { workspace = true }
 ps-ui-components = { workspace = true }
@@ -35,7 +36,13 @@ gpui_platform = { git = "https://github.com/zed-industries/zed", tag = "v1.18.0"
 
 [features]
 default = []
-gpui-ui = ["dep:gpui", "dep:gpui_platform", "gpui_platform/runtime_shaders", "dep:unicode-segmentation"]
+gpui-ui = [
+    "dep:gpui",
+    "dep:gpui_platform",
+    "gpui_platform/runtime_shaders",
+    "gpui_platform/font-kit",
+    "dep:unicode-segmentation",
+]
 
 [lints]
 workspace = true

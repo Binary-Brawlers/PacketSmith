@@ -506,6 +506,16 @@ Legend:
 
 # 11. HTTP Client — Core
 
+Native integration update: `shell/workbench_view.rs` now opens at startup with
+session request tabs, editable method/URL, header rows, raw/JSON body input,
+Send/Cancel, workspace request navigation, environment resolution, and response
+body/headers/metadata. `ps-http::desktop` retains bounded responses for this view.
+Saving drafts, history, splits, advanced body editors, and vault controls still
+need native integration. Existing completion marks below do not establish that
+all underlying APIs are exposed in the desktop. Type checks including regression
+targets passed; visual and runtime verification remain pending.
+See `docs/testing/desktop-workbench.md`.
+
 ## 11.1 Request Bar
 
 - [x] method dropdown.
@@ -844,8 +854,8 @@ Legend:
 
 Implementation is present for every item below, including the native GPUI screen
 in `crates/packetsmith-app/src/shell/environment_view.rs` and shared workflows in
-`crates/packetsmith-app/src/shell/environments.rs`. The desktop entry point opens
-this screen; it provides workspace loading, the environment selector/table, row
+`crates/packetsmith-app/src/shell/environments.rs`. The desktop entry point opens the request workbench, with this screen available
+under Environments; it provides workspace loading, the environment selector/table, row
 editing, lifecycle controls, file import/export, comparison, and production checks.
 
 Validation: `cargo check --workspace --all-targets --features packetsmith-app/gpui-ui`
@@ -877,6 +887,16 @@ See `docs/adr/0012-environment-management.md` and `docs/testing/environments.md`
 ---
 
 # 19. Vault
+
+Storage/service foundation implemented in `crates/ps-vault`: explicit OS backends,
+versioned per-secret records, create/update/delete/reveal APIs, domain policy and
+tags, and request-scoped vault reference resolution. AppState exposes workspace-ID
+configuration. GPUI management, automatic workspace configuration, HTTP execution
+wiring, clipboard controls, search/catalog, and encrypted fallback remain pending.
+`cargo check --workspace --all-targets --features packetsmith-app/gpui-ui` passed;
+security regression targets compile but were not run under the type-check-only
+instruction. Checkboxes remain open pending integration and runtime verification.
+See `docs/adr/0013-os-vault-foundation.md` and `docs/testing/vault.md`.
 
 ## 19.1 OS Storage
 

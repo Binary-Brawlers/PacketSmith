@@ -23,3 +23,8 @@ pub mod environments;
 mod environment_input;
 #[cfg(feature = "gpui-ui")]
 pub mod environment_view;
+
+#[cfg(feature = "gpui-ui")]
+pub mod workbench_view;
+#[cfg(feature = "gpui-ui")]
+mod typography;

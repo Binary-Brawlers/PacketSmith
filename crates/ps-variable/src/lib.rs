@@ -604,6 +604,21 @@ impl VariableResolver {
             .find_definition(name)
             .ok_or_else(|| VariableResolveError::Unresolved(name.to_string()))?;
 
+        // Vault bytes are opaque credentials, never another template to evaluate.
+        if definition.source.scope == VariableScope::Vault {
+            return Ok(ResolvedVariable {
+                name: name.to_string(),
+                value: definition.value.clone(),
+                display_value: SECRET_MASK.into(),
+                is_secret: true,
+                provenance: ResolutionProvenance {
+                    source: definition.source.clone(),
+                    definition_name: definition.name.clone(),
+                    object_path: None,
+                },
+            });
+        }
+
         stack.push(name.to_string());
         let nested = self.resolve_template_inner(&definition.value, stack, depth + 1);
         stack.pop();

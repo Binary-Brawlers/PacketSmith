@@ -6,6 +6,7 @@ members = [
     "crates/ps-workspace",
     "crates/ps-storage",
     "crates/ps-variable",
+    "crates/ps-vault",
     "crates/ps-request-engine",
     "crates/ps-http",
     "crates/ps-ui-components",
@@ -31,6 +32,7 @@ ps-domain = { path = "crates/ps-domain" }
 ps-workspace = { path = "crates/ps-workspace" }
 ps-storage = { path = "crates/ps-storage" }
 ps-variable = { path = "crates/ps-variable" }
+ps-vault = { path = "crates/ps-vault" }
 ps-request-engine = { path = "crates/ps-request-engine" }
 ps-http = { path = "crates/ps-http" }
 ps-ui-components = { path = "crates/ps-ui-components" }

@@ -41,12 +41,40 @@ packetsmith/
 ## Getting Started
 
 ### Prerequisites
-- **Rust:** `1.94.0` or stable with `rustfmt` and `clippy`.
+- **Rust:** Install through `rustup`; this repository selects the version pinned in `rust-toolchain.toml`, including `rustfmt` and `clippy`.
 - **macOS:** Xcode command line tools.
 - **Linux:** `vulkan-loader`, `libxkbcommon-dev`, `libfontconfig1-dev`.
 - **Windows:** MSVC C++ build tools.
 
 Refer to [`docs/setup/`](docs/setup/) for platform-specific instructions.
+
+### Start the Application
+
+From the repository root, run:
+
+```bash
+cargo run -p packetsmith-app --features gpui-ui
+```
+
+This opens the native desktop window. The `gpui-ui` feature is required; without it, the application initializes the core shell and exits without opening a window. The first launch may take longer while Cargo downloads and compiles dependencies.
+
+### Current Desktop Workflow
+
+The app opens the **Requests** workbench. Enter an HTTP method and URL, add headers
+or a raw/JSON body, then choose **Send request**. Use **Cancel** to stop an in-flight
+request. Response status, timing, size, body, and headers appear below the editor.
+
+- **New request** opens another draft; select a tab to switch drafts.
+- **Cmd/Ctrl+Enter** sends the active request; **Cmd/Ctrl+T** creates a draft.
+- **Environments** opens workspace loading and environment management. Its active
+  environment is used when resolving variables for requests.
+- Saved HTTP requests from the loaded workspace appear in the left sidebar.
+
+This is an initial desktop integration: drafts are session-only, response storage
+is limited to 2 MiB, and redirects are not followed. Saving edited drafts, history,
+splits, advanced body editors, and vault controls are not connected to this screen yet.
+
+If controls appear without text, see [desktop troubleshooting](docs/testing/desktop-workbench.md).
 
 ### Common Developer Commands
 

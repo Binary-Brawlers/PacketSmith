@@ -25,3 +25,8 @@ To prevent circular dependencies and architectural drift, PacketSmith enforces s
 3. Neither `ps-http` nor `ps-request-engine` may depend on `packetsmith-app` or `ps-ui-components`.
 4. Circular dependencies are strictly forbidden and will fail compilation.
 5. `ps-variable` owns resolution policy and must not depend on protocol, storage, or UI crates.
+
+## ps-vault
+
+OS credential storage and domain-restricted secret service; depends on ps-variable,
+never GPUI or workspace persistence. See ADR 0013 for integration boundaries.
