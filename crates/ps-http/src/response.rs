@@ -1,8 +1,8 @@
 //! Response viewing models, metrics calculations, hex dump generator, and syntax formatters.
 
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::Write;
-use serde::{Deserialize, Serialize};
 
 pub const LARGE_RESPONSE_THRESHOLD_BYTES: usize = 10 * 1024 * 1024; // 10 MB
 

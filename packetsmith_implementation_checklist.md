@@ -954,22 +954,31 @@ See `docs/adr/0013-os-vault-foundation.md` and `docs/testing/vault.md`.
 
 # 21. Authentication
 
+Auth foundation implemented in `crates/ps-http/src/auth.rs`: `AuthProvider`
+trait (No/Bearer/Basic/ApiKey providers), `resolve_effective_auth`
+(request → folder → collection inheritance), vault/variable secret resolution,
+and redaction-aware output (`redacted_preview`, redacted `Debug`, redacted event
+URLs). Wired into `HttpExecutor` and `send_desktop_request_with_auth` with
+fail-closed errors and wire-level tests. OAuth 2.0 and remaining providers
+return explicit `Unsupported`. Desktop workbench UI migration to `AuthConfig`
+remains pending.
+
 ## 21.1 Architecture
 
-- [ ] auth provider trait.
-- [ ] auth inheritance.
-- [ ] collection auth.
-- [ ] folder auth.
-- [ ] request auth.
-- [ ] redaction-aware auth output.
+- [x] auth provider trait.
+- [x] auth inheritance.
+- [x] collection auth.
+- [x] folder auth.
+- [x] request auth.
+- [x] redaction-aware auth output.
 
 ## 21.2 Providers
 
-- [ ] No Auth.
-- [ ] Inherit.
-- [ ] API Key.
-- [ ] Bearer.
-- [ ] Basic.
+- [x] No Auth.
+- [x] Inherit.
+- [x] API Key.
+- [x] Bearer.
+- [x] Basic.
 - [ ] Digest.
 - [ ] OAuth 1.0.
 - [ ] OAuth 2.0.

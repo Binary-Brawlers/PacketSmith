@@ -1,5 +1,6 @@
 //! Bounded HTTP response execution shared by native request editors.
 use crate::{HttpBody, HttpRequest, HttpResponse, NetworkClientBuilder, RedirectPolicy};
+use ps_domain::AuthConfig;
 use ps_request_engine::{ExecutionError, VariableResolver};
 use std::{collections::HashMap, time::Instant};
 
@@ -22,6 +23,35 @@ pub async fn send_desktop_request(
     request: HttpRequest,
     resolver: VariableResolver,
 ) -> Result<HttpResponse, ExecutionError> {
+    send_desktop_request_with_auth(request, resolver, &AuthConfig::None).await
+}
+
+fn auth_error(error: crate::auth::AuthError) -> ExecutionError {
+    match error {
+        crate::auth::AuthError::MissingCredential | crate::auth::AuthError::Unresolved => {
+            ExecutionError::Protocol(
+                "Resolve missing auth credentials or variables before sending.".into(),
+            )
+        }
+        crate::auth::AuthError::Unsupported => {
+            ExecutionError::Protocol("This authentication method is not supported yet.".into())
+        }
+        crate::auth::AuthError::InvalidConfig => {
+            ExecutionError::Protocol("The authentication configuration is invalid.".into())
+        }
+    }
+}
+
+/// Auth-aware variant. Credentials resolve through `resolver` (vault names and
+/// `{{templates}}`); failures block the send instead of going out unauthenticated.
+/// Auth wire values are never re-resolved as templates: vault bytes are opaque
+/// and must stay literal.
+pub async fn send_desktop_request_with_auth(
+    request: HttpRequest,
+    resolver: VariableResolver,
+    auth: &AuthConfig,
+) -> Result<HttpResponse, ExecutionError> {
+    let applied = crate::auth::apply_auth(auth, &resolver).map_err(auth_error)?;
     let started = Instant::now();
     let mut resolved = request.clone();
     resolved.raw_url = resolve(&resolver, &request.raw_url)?;
@@ -31,9 +61,17 @@ pub async fn send_desktop_request(
             param.value = resolve(&resolver, &param.value)?;
         }
     }
-    let url = resolved
+    let mut url = resolved
         .build_resolved_url()
         .map_err(|_| ExecutionError::Protocol("Enter a valid HTTP or HTTPS URL.".into()))?;
+    if !applied.query_params().is_empty() {
+        url.query_pairs_mut().extend_pairs(
+            applied
+                .query_params()
+                .iter()
+                .map(|(k, v)| (k.as_str(), v.as_str())),
+        );
+    }
     if !matches!(url.scheme(), "http" | "https") || url.host_str().is_none() {
         return Err(ExecutionError::Protocol(
             "Enter a valid HTTP or HTTPS URL.".into(),
@@ -49,14 +87,55 @@ pub async fn send_desktop_request(
         .build()
         .map_err(|_| ExecutionError::Internal("Could not initialize the HTTP client.".into()))?;
     let mut builder = client.request(method, url);
+    let mut user_header_names: Vec<String> = Vec::new();
+    let mut cookie_values: Vec<String> = Vec::new();
     for header in request.headers.iter().filter(|h| h.enabled) {
         let name = resolve(&resolver, &header.name)?;
         let value = resolve(&resolver, &header.value)?;
         let name = reqwest::header::HeaderName::from_bytes(name.as_bytes())
             .map_err(|_| ExecutionError::Protocol("A header name is invalid.".into()))?;
+        if name == reqwest::header::COOKIE {
+            // Defer: user + auth cookies merge into a single Cookie header below.
+            cookie_values.push(value);
+            if !user_header_names
+                .iter()
+                .any(|n| n.eq_ignore_ascii_case("cookie"))
+            {
+                user_header_names.push("cookie".to_string());
+            }
+            continue;
+        }
+        user_header_names.push(name.to_string());
         let value = reqwest::header::HeaderValue::from_str(&value)
             .map_err(|_| ExecutionError::Protocol("A header value is invalid.".into()))?;
         builder = builder.header(name, value);
+    }
+    // Generated auth applies after explicit headers; an explicit header with the
+    // same name wins (no duplicate Authorization headers). Auth wire values are
+    // final and bypass template re-resolution so vault bytes stay literal.
+    for header in applied.headers() {
+        if user_header_names
+            .iter()
+            .any(|n| n.eq_ignore_ascii_case(&header.name))
+        {
+            continue;
+        }
+        let name = reqwest::header::HeaderName::from_bytes(header.name.as_bytes())
+            .map_err(|_| ExecutionError::Protocol("An auth header name is invalid.".into()))?;
+        if name == reqwest::header::COOKIE {
+            cookie_values.push(header.wire_value().to_owned());
+            continue;
+        }
+        user_header_names.push(name.to_string());
+        let value = reqwest::header::HeaderValue::from_str(header.wire_value())
+            .map_err(|_| ExecutionError::Protocol("An auth header value is invalid.".into()))?;
+        builder = builder.header(name, value);
+    }
+    for (k, v) in applied.cookies() {
+        cookie_values.push(format!("{k}={v}"));
+    }
+    if !cookie_values.is_empty() {
+        builder = builder.header(reqwest::header::COOKIE, cookie_values.join("; "));
     }
     match &request.body {
         HttpBody::None => {}
@@ -141,6 +220,34 @@ fn network_error(error: reqwest::Error) -> ExecutionError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ps_domain::ApiKeyLocation;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    /// Serves one request, captures the raw HTTP wire, and replies 200 OK.
+    async fn serve_once_capture_wire() -> (String, tokio::task::JoinHandle<String>) {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap().to_string();
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut bytes = Vec::new();
+            let mut chunk = [0u8; 1024];
+            loop {
+                let count = socket.read(&mut chunk).await.unwrap();
+                assert_ne!(count, 0);
+                bytes.extend_from_slice(&chunk[..count]);
+                if bytes.windows(4).any(|w| w == b"\r\n\r\n") {
+                    break;
+                }
+            }
+            socket
+                .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK")
+                .await
+                .unwrap();
+            String::from_utf8(bytes).unwrap()
+        });
+        (address, server)
+    }
+
     #[test]
     fn unresolved_variables_fail_without_exposing_values() {
         let resolver = VariableResolver::new();
@@ -202,5 +309,126 @@ mod tests {
         assert_eq!(response.body_bytes, b"OK");
         assert_eq!(response.headers["set-cookie"], "[REDACTED]");
         server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn bearer_auth_sends_vault_backed_authorization_header() {
+        let (address, server) = serve_once_capture_wire().await;
+        let request = HttpRequest::new(crate::HttpMethod::Get, format!("http://{address}/secure"));
+        let resolver = VariableResolver::new().with_vault(HashMap::from([(
+            "AUTH_TOKEN".into(),
+            "desktop-secret".into(),
+        )]));
+        let auth = AuthConfig::Bearer {
+            token_secret_ref: "AUTH_TOKEN".into(),
+        };
+        let response = send_desktop_request_with_auth(request, resolver, &auth)
+            .await
+            .unwrap();
+        assert_eq!(response.status_code, 200);
+        let wire = server.await.unwrap().to_ascii_lowercase();
+        assert!(wire.contains("authorization: bearer desktop-secret"));
+    }
+
+    #[tokio::test]
+    async fn basic_auth_sends_rfc7617_header() {
+        let (address, server) = serve_once_capture_wire().await;
+        let request = HttpRequest::new(crate::HttpMethod::Get, format!("http://{address}/secure"));
+        let resolver =
+            VariableResolver::new().with_vault(HashMap::from([("PASS".into(), "secret".into())]));
+        let auth = AuthConfig::Basic {
+            username: "admin".into(),
+            password_secret_ref: Some("PASS".into()),
+        };
+        send_desktop_request_with_auth(request, resolver, &auth)
+            .await
+            .unwrap();
+        let wire = server.await.unwrap().to_ascii_lowercase();
+        // "admin:secret" base64 is YWRtaW46c2VjcmV0 (lowercased on the wire here).
+        assert!(wire.contains("authorization: basic ywrtaw46c2vjcmv0"));
+    }
+
+    #[tokio::test]
+    async fn api_key_query_appends_to_request_line() {
+        let (address, server) = serve_once_capture_wire().await;
+        let request = HttpRequest::new(crate::HttpMethod::Get, format!("http://{address}/items"));
+        let resolver = VariableResolver::new()
+            .with_vault(HashMap::from([("K".into(), "query-secret".into())]));
+        let auth = AuthConfig::ApiKey {
+            key: "api_key".into(),
+            value_secret_ref: "K".into(),
+            location: ApiKeyLocation::Query,
+        };
+        send_desktop_request_with_auth(request, resolver, &auth)
+            .await
+            .unwrap();
+        let wire = server.await.unwrap();
+        assert!(wire.starts_with("GET /items?api_key=query-secret HTTP/1.1"));
+    }
+
+    #[tokio::test]
+    async fn api_key_cookie_merges_with_explicit_cookie_header() {
+        let (address, server) = serve_once_capture_wire().await;
+        let mut request =
+            HttpRequest::new(crate::HttpMethod::Get, format!("http://{address}/items"));
+        request.headers.push(crate::HeaderEntry {
+            name: "Cookie".into(),
+            value: "theme=light".into(),
+            enabled: true,
+            is_secret: false,
+            description: None,
+        });
+        let resolver = VariableResolver::new()
+            .with_vault(HashMap::from([("K".into(), "cookie-secret".into())]));
+        let auth = AuthConfig::ApiKey {
+            key: "session".into(),
+            value_secret_ref: "K".into(),
+            location: ApiKeyLocation::Cookie,
+        };
+        send_desktop_request_with_auth(request, resolver, &auth)
+            .await
+            .unwrap();
+        let wire = server.await.unwrap().to_ascii_lowercase();
+        assert!(wire.contains("cookie: theme=light; session=cookie-secret"));
+    }
+
+    #[tokio::test]
+    async fn explicit_authorization_header_wins_over_generated_auth() {
+        let (address, server) = serve_once_capture_wire().await;
+        let mut request =
+            HttpRequest::new(crate::HttpMethod::Get, format!("http://{address}/items"));
+        request.headers.push(crate::HeaderEntry {
+            name: "Authorization".into(),
+            value: "Bearer explicit".into(),
+            enabled: true,
+            is_secret: true,
+            description: None,
+        });
+        let resolver = VariableResolver::new().with_vault(HashMap::from([(
+            "AUTH_TOKEN".into(),
+            "generated-secret".into(),
+        )]));
+        let auth = AuthConfig::Bearer {
+            token_secret_ref: "AUTH_TOKEN".into(),
+        };
+        send_desktop_request_with_auth(request, resolver, &auth)
+            .await
+            .unwrap();
+        let wire = server.await.unwrap().to_ascii_lowercase();
+        assert!(wire.contains("authorization: bearer explicit"));
+        assert!(!wire.contains("generated-secret"));
+    }
+
+    #[tokio::test]
+    async fn unresolved_auth_fails_before_network_without_leaking() {
+        let request = HttpRequest::new(crate::HttpMethod::Get, "http://127.0.0.1:1/unused");
+        let resolver = VariableResolver::new();
+        let auth = AuthConfig::Bearer {
+            token_secret_ref: "MISSING_TOKEN".into(),
+        };
+        let error = send_desktop_request_with_auth(request, resolver, &auth)
+            .await
+            .unwrap_err();
+        assert!(!error.to_string().contains("MISSING_TOKEN"));
     }
 }

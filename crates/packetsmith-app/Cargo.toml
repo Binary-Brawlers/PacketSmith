@@ -41,6 +41,10 @@ gpui-ui = [
     "dep:gpui_platform",
     "gpui_platform/runtime_shaders",
     "gpui_platform/font-kit",
+    # Linux display backends: X11 sessions (including Xvfb) and Wayland
+    # compositors. Without at least one, gpui_linux panics at startup.
+    "gpui_platform/x11",
+    "gpui_platform/wayland",
     "dep:unicode-segmentation",
 ]
 

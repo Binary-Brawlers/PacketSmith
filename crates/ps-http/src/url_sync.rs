@@ -224,7 +224,9 @@ mod tests {
 
     #[test]
     fn test_detect_path_variables() {
-        let vars = UrlSyncEngine::detect_path_variables("https://api.example.com/users/:userId/orders/{{orderId}}");
+        let vars = UrlSyncEngine::detect_path_variables(
+            "https://api.example.com/users/:userId/orders/{{orderId}}",
+        );
         assert_eq!(vars, vec!["userId".to_string(), "orderId".to_string()]);
     }
 
@@ -237,6 +239,9 @@ mod tests {
         assert_eq!(parsed[0].1, "application/json");
 
         let serialized = UrlSyncEngine::serialize_bulk_text(&parsed);
-        assert_eq!(serialized, "Accept: application/json\nAuthorization: Bearer xyz");
+        assert_eq!(
+            serialized,
+            "Accept: application/json\nAuthorization: Bearer xyz"
+        );
     }
 }

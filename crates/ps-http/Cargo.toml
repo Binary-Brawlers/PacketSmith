@@ -9,6 +9,7 @@ description = "HTTP protocol client and models for PacketSmith"
 
 [dependencies]
 ps-domain = { workspace = true }
+ps-variable = { workspace = true }
 ps-request-engine = { workspace = true }
 async-trait = { workspace = true }
 tokio = { workspace = true }

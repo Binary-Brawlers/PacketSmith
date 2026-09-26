@@ -1,25 +1,27 @@
 //! HTTP protocol models, URL parser, and execution client for PacketSmith.
 
-use std::collections::HashMap;
-use std::fmt;
-use std::str::FromStr;
-use std::time::Instant;
 use async_trait::async_trait;
 use chrono::Utc;
 use ps_domain::{ProtocolRequest, RequestDocument};
 use ps_request_engine::{
-    EventSink, ExecutionContext, ExecutionError, ExecutionEvent, ExecutionSummary, ProtocolExecutor,
-    ResolutionResult,
+    EventSink, ExecutionContext, ExecutionError, ExecutionEvent, ExecutionSummary,
+    ProtocolExecutor, ResolutionResult,
 };
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::fmt;
+use std::str::FromStr;
+use std::time::Instant;
 use thiserror::Error;
 use url::Url;
 
+pub mod auth;
 pub mod client;
 pub mod desktop;
 pub mod response;
 pub mod url_sync;
 
+pub use auth::*;
 pub use client::*;
 pub use response::*;
 pub use url_sync::*;
@@ -195,15 +197,28 @@ pub struct HttpExecutor {
 impl HttpExecutor {
     pub fn new() -> Self {
         Self {
-            client: reqwest::Client::builder()
-                .build()
-                .unwrap_or_default(),
+            client: reqwest::Client::builder().build().unwrap_or_default(),
         }
     }
 }
 
 fn resolve_request_url(ctx: &ExecutionContext, raw_url: &str) -> ResolutionResult {
     ctx.variable_resolver.resolve_template(raw_url)
+}
+
+/// Secret-safe mapping: messages never include credential values.
+fn auth_to_protocol_error(error: auth::AuthError) -> ExecutionError {
+    match error {
+        auth::AuthError::MissingCredential | auth::AuthError::Unresolved => {
+            ExecutionError::Protocol("Resolve missing auth credentials before sending.".into())
+        }
+        auth::AuthError::Unsupported => {
+            ExecutionError::Protocol("This authentication method is not supported yet.".into())
+        }
+        auth::AuthError::InvalidConfig => {
+            ExecutionError::Protocol("The authentication configuration is invalid.".into())
+        }
+    }
 }
 
 #[async_trait]
@@ -233,6 +248,12 @@ impl ProtocolExecutor for HttpExecutor {
 
         let resolved_url = resolve_request_url(ctx, &http_payload.url);
 
+        // Auth is resolved through the shared variable/vault resolver so
+        // `token_secret_ref` vault names and `{{templates}}` keep working.
+        // Fail closed: never send without credentials that failed to resolve.
+        let applied_auth = auth::apply_auth(&request.auth, &ctx.variable_resolver)
+            .map_err(auth_to_protocol_error)?;
+
         if ctx.cancellation_token.is_cancelled() {
             event_sink
                 .emit(ExecutionEvent::Cancelled {
@@ -242,21 +263,66 @@ impl ProtocolExecutor for HttpExecutor {
             return Err(ExecutionError::Cancelled);
         }
 
-        let start = Instant::now();
-        event_sink
-            .emit(ExecutionEvent::Connecting {
-                // Event sinks feed logs and UI. Always use the redacted preview.
-                url: resolved_url.display_value.clone(),
-                timestamp: Utc::now(),
-            })
-            .await;
-
         let method = match reqwest::Method::from_bytes(http_payload.method.as_bytes()) {
             Ok(m) => m,
             Err(_) => reqwest::Method::GET,
         };
 
-        let response_res = self.client.request(method, &resolved_url.value).send().await;
+        // Attach auth query pairs before sending; the event/log URL stays redacted.
+        let mut wire_url = resolved_url.value.clone();
+        let mut display_url = resolved_url.display_value.clone();
+        if !applied_auth.query_params().is_empty() {
+            if let Ok(mut parsed) = Url::parse(&wire_url) {
+                parsed
+                    .query_pairs_mut()
+                    .extend_pairs(applied_auth.query_params().iter().map(|(k, v)| (k, v)));
+                wire_url = parsed.to_string();
+            }
+            if let Ok(mut parsed) = Url::parse(&display_url).or_else(|_| Url::parse(&wire_url)) {
+                let mut pairs: Vec<(String, String)> = parsed
+                    .query_pairs()
+                    .map(|(k, v)| (k.into_owned(), v.into_owned()))
+                    .collect();
+                for (key, _) in applied_auth.query_params() {
+                    if !pairs.iter().any(|(k, _)| k == key) {
+                        pairs.push((key.clone(), ps_variable::SECRET_MASK.to_owned()));
+                    }
+                }
+                parsed.query_pairs_mut().clear().extend_pairs(&pairs);
+                display_url = parsed.to_string();
+            }
+        }
+
+        let mut request_builder = self.client.request(method, &wire_url);
+        for header in applied_auth.headers() {
+            // Header names were validated at apply time; re-validate at the wire
+            // boundary and fail closed without echoing values.
+            let name = reqwest::header::HeaderName::from_bytes(header.name.as_bytes())
+                .map_err(|_| ExecutionError::Protocol("An auth header name is invalid.".into()))?;
+            let value = reqwest::header::HeaderValue::from_str(header.wire_value())
+                .map_err(|_| ExecutionError::Protocol("An auth header value is invalid.".into()))?;
+            request_builder = request_builder.header(name, value);
+        }
+        if !applied_auth.cookies().is_empty() {
+            let cookie_value = applied_auth
+                .cookies()
+                .iter()
+                .map(|(k, v)| format!("{k}={v}"))
+                .collect::<Vec<_>>()
+                .join("; ");
+            request_builder = request_builder.header(reqwest::header::COOKIE, cookie_value);
+        }
+
+        let start = Instant::now();
+        event_sink
+            .emit(ExecutionEvent::Connecting {
+                // Event sinks feed logs and UI. Always use the redacted preview.
+                url: display_url,
+                timestamp: Utc::now(),
+            })
+            .await;
+
+        let response_res = request_builder.send().await;
 
         match response_res {
             Ok(resp) => {
@@ -362,14 +428,99 @@ mod tests {
             HashMap::new(),
             HashMap::from([("token".into(), "do-not-log".into())]),
         );
-        let resolved = resolve_request_url(
-            &context,
-            "https://api.example.com?token={{vault:token}}",
-        );
+        let resolved =
+            resolve_request_url(&context, "https://api.example.com?token={{vault:token}}");
 
         assert!(resolved.value.contains("do-not-log"));
         assert!(!resolved.display_value.contains("do-not-log"));
         assert!(!format!("{resolved:?}").contains("do-not-log"));
         assert!(!format!("{context:?}").contains("do-not-log"));
+    }
+
+    #[tokio::test]
+    async fn test_executor_sends_bearer_auth_with_redacted_events() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        use tokio::sync::mpsc;
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut bytes = Vec::new();
+            let mut chunk = [0u8; 1024];
+            loop {
+                let count = socket.read(&mut chunk).await.unwrap();
+                assert_ne!(count, 0);
+                bytes.extend_from_slice(&chunk[..count]);
+                if bytes.windows(4).any(|w| w == b"\r\n\r\n") {
+                    break;
+                }
+            }
+            socket
+                .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+                .await
+                .unwrap();
+            String::from_utf8(bytes).unwrap()
+        });
+
+        let mut doc = RequestDocument::new(
+            "Secure",
+            ProtocolRequest::Http(ps_domain::HttpRequestPayload {
+                method: "GET".to_string(),
+                url: format!("http://{address}/secure"),
+            }),
+        );
+        doc.auth = ps_domain::AuthConfig::Bearer {
+            token_secret_ref: "TOKEN".into(),
+        };
+        let ctx = ExecutionContext::new(
+            HashMap::new(),
+            HashMap::from([("TOKEN".into(), "executor-secret".into())]),
+        );
+        let (tx, mut rx) = mpsc::channel(32);
+        let sink = EventSink::new(tx);
+        let summary = HttpExecutor::new()
+            .execute(&doc, &ctx, &sink)
+            .await
+            .unwrap();
+        assert_eq!(summary.status_code, Some(200));
+
+        let wire = server.await.unwrap().to_ascii_lowercase();
+        assert!(wire.contains("authorization: bearer executor-secret"));
+
+        // Connecting events must use the redacted URL; nothing secret leaks.
+        let mut saw_connecting = false;
+        while let Ok(event) = rx.try_recv() {
+            if let ExecutionEvent::Connecting { url, .. } = &event {
+                saw_connecting = true;
+                assert!(!url.contains("executor-secret"));
+            }
+            assert!(!format!("{event:?}").contains("executor-secret"));
+        }
+        assert!(saw_connecting);
+    }
+
+    #[tokio::test]
+    async fn test_executor_fails_closed_on_unresolved_auth() {
+        use tokio::sync::mpsc;
+
+        let mut doc = RequestDocument::new(
+            "Secure",
+            ProtocolRequest::Http(ps_domain::HttpRequestPayload {
+                method: "GET".to_string(),
+                url: "http://127.0.0.1:1/unused".to_string(),
+            }),
+        );
+        doc.auth = ps_domain::AuthConfig::Bearer {
+            token_secret_ref: "MISSING".into(),
+        };
+        let ctx = ExecutionContext::new(HashMap::new(), HashMap::new());
+        let (tx, _rx) = mpsc::channel(32);
+        let sink = EventSink::new(tx);
+        let error = HttpExecutor::new()
+            .execute(&doc, &ctx, &sink)
+            .await
+            .unwrap_err();
+        assert!(!error.to_string().contains("MISSING"));
     }
 }

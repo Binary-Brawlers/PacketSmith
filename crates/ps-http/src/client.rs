@@ -1,9 +1,9 @@
 //! Advanced HTTP networking client configuration, redirect tracking, proxy routing,
 //! and TLS policy enforcement.
 
-use std::time::Duration;
 use reqwest::redirect::Policy;
 use serde::{Deserialize, Serialize};
+use std::time::Duration;
 use thiserror::Error;
 use tracing::warn;
 
