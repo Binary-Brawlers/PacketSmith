@@ -588,7 +588,7 @@ impl Element for TextElement {
                             bounds.bottom(),
                         ),
                     ),
-                    rgba(0x6366f140),
+                    rgba(0x8b5cf140),
                 )),
                 None,
             )
@@ -702,7 +702,7 @@ impl Render for TextInput {
             .rounded_md()
             .border_1()
             .border_color(rgb(border_color))
-            .hover(move |s| s.border_color(rgb(if border_color == theme::DANGER { theme::DANGER } else { 0x3d4760 })))
+            .hover(move |s| s.border_color(rgb(if border_color == theme::DANGER { theme::DANGER } else { 0x3a4a80 })))
             .focus(|style| style.border_color(rgb(theme::BORDER_FOCUS)))
             .bg(rgb(theme::SURFACE))
             .h(height);

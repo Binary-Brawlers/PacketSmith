@@ -589,29 +589,28 @@ impl Render for WorkbenchView {
         // 1. Left Activity Bar (48px rail)
         // -------------------------------------------------------------------
         let activity_bar = div()
-            .w(px(50.))
+            .w(px(58.))
             .flex_shrink_0()
             .flex()
             .flex_col()
             .items_center()
             .py_3()
-            .gap_3()
+            .gap_2()
             .bg(rgb(theme::ACTIVITY_BAR))
             .border_r_1()
-            .border_color(rgb(theme::BORDER))
+            .border_color(rgb(theme::BORDER_SUBTLE))
             .child(
-                // Logo Icon
+                // Gradient logo tile
                 div()
                     .flex()
                     .items_center()
                     .justify_center()
-                    .w(px(34.))
-                    .h(px(34.))
-                    .rounded_md()
-                    .bg(rgb(theme::SURFACE_ELEVATED))
-                    .border_1()
-                    .border_color(rgb(theme::ACCENT))
-                    .text_color(rgb(theme::ACCENT))
+                    .w(px(36.))
+                    .h(px(36.))
+                    .rounded_xl()
+                    .bg(theme::brand_gradient())
+                    .shadow_sm()
+                    .text_color(rgb(theme::INK))
                     .font_weight(gpui::FontWeight::BOLD)
                     .text_size(px(14.))
                     .child("PS"),
@@ -679,13 +678,13 @@ impl Render for WorkbenchView {
         // 2. Secondary Sidebar (260px)
         // -------------------------------------------------------------------
         let mut sidebar = div()
-            .w(px(260.))
+            .w(px(276.))
             .flex_shrink_0()
             .flex()
             .flex_col()
             .bg(rgb(theme::SIDEBAR))
             .border_r_1()
-            .border_color(rgb(theme::BORDER));
+            .border_color(rgb(theme::BORDER_SUBTLE));
 
         match self.activity_mode {
             ActivityMode::Collections => {
@@ -912,7 +911,7 @@ impl Render for WorkbenchView {
         // 3. Top Navigation Header Bar
         // -------------------------------------------------------------------
         let top_header = div()
-            .h(px(46.))
+            .h(px(54.))
             .flex_shrink_0()
             .flex()
             .items_center()
@@ -921,7 +920,7 @@ impl Render for WorkbenchView {
             .gap_3()
             .bg(rgb(theme::HEADER))
             .border_b_1()
-            .border_color(rgb(theme::BORDER))
+            .border_color(rgb(theme::BORDER_SUBTLE))
             // Left: Breadcrumbs
             .child(
                 div()
@@ -952,14 +951,15 @@ impl Render for WorkbenchView {
                     .flex()
                     .items_center()
                     .gap_2()
-                    .w(px(280.))
+                    .w(px(320.))
                     .px_3()
-                    .py_1()
-                    .rounded_md()
+                    .py_1p5()
+                    .rounded_xl()
                     .bg(rgb(theme::SURFACE))
                     .border_1()
                     .border_color(rgb(theme::BORDER))
-                    .hover(|s| s.border_color(rgb(theme::BORDER_FOCUS)))
+                    .shadow_xs()
+                    .hover(|s| s.border_color(rgb(theme::ACCENT)))
                     .child(icon(IconKind::Search, px(13.), rgb(theme::MUTED)))
                     .child(
                         div()
@@ -1035,15 +1035,14 @@ impl Render for WorkbenchView {
         // -------------------------------------------------------------------
         let mut tab_strip = div()
             .id("workbench-tabs")
-            .h(px(38.))
+            .h(px(44.))
             .flex_shrink_0()
             .flex()
             .items_center()
-            .gap_1()
-            .px_3()
-            .bg(rgb(theme::HEADER))
-            .border_b_1()
-            .border_color(rgb(theme::BORDER))
+            .gap_1p5()
+            .px_4()
+            .pt_1p5()
+            .bg(rgb(theme::CANVAS))
             .overflow_x_scroll();
 
         for (idx, draft) in self.drafts.iter().enumerate() {
@@ -1060,13 +1059,13 @@ impl Render for WorkbenchView {
                     .flex()
                     .items_center()
                     .gap_2()
-                    .px_3()
-                    .h(px(32.))
-                    .rounded_t_md()
+                    .px_3p5()
+                    .h(px(36.))
+                    .rounded_t_xl()
                     .bg(rgb(if active {
                         theme::SURFACE_ELEVATED
                     } else {
-                        theme::HEADER
+                        0x00000000
                     }))
                     .border_t_2()
                     .border_color(rgb(if active {
@@ -1074,7 +1073,7 @@ impl Render for WorkbenchView {
                     } else {
                         0x00000000
                     }))
-                    .hover(|s| s.bg(rgb(theme::HOVER)))
+                    .hover(|s| s.bg(rgb(if active { theme::SURFACE_ELEVATED } else { theme::HOVER })))
                     .child(method_badge(&method))
                     .child(
                         div()
@@ -1143,16 +1142,22 @@ impl Render for WorkbenchView {
 
         let composer_bar = div()
             .px_6()
-            .pt_4()
-            .pb_3()
+            .pt_3()
+            .pb_2()
             .flex()
             .flex_col()
-            .gap_3()
+            .gap_2p5()
             .child(
                 div()
                     .flex()
                     .items_center()
-                    .gap_2()
+                    .gap_2p5()
+                    .p_2p5()
+                    .rounded_xl()
+                    .bg(rgb(theme::SURFACE_ELEVATED))
+                    .border_1()
+                    .border_color(rgb(theme::BORDER))
+                    .shadow_sm()
                     // Method selector dropdown container
                     .child(
                         div()
@@ -1165,12 +1170,12 @@ impl Render for WorkbenchView {
                                     .flex()
                                     .items_center()
                                     .gap_1p5()
-                                    .px_3()
-                                    .h(px(34.))
-                                    .rounded_md()
+                                    .px_3p5()
+                                    .h(px(38.))
+                                    .rounded_lg()
                                     .bg(rgb(theme::method_bg_color(&current_method)))
                                     .border_1()
-                                    .border_color(rgba((theme::method_color(&current_method) << 8) | 0x44))
+                                    .border_color(rgba((theme::method_color(&current_method) << 8) | 0x66))
                                     .text_color(rgb(theme::method_color(&current_method)))
                                     .font_family(typography::MONO_FONT)
                                     .text_size(px(12.5))
@@ -1302,16 +1307,17 @@ impl Render for WorkbenchView {
             composer_bar.child(
                 div()
                     .w_full()
-                    .h(px(2.5))
+                    .h(px(3.))
+                    .mx_2()
                     .rounded_full()
-                    .bg(rgb(theme::SURFACE))
+                    .bg(rgb(theme::SURFACE_ELEVATED))
                     .overflow_hidden()
                     .child(
                         div()
                             .h_full()
                             .w(px(220.))
                             .rounded_full()
-                            .bg(rgb(theme::ACCENT))
+                            .bg(theme::brand_gradient())
                             .with_animation(
                                 "in-flight-progress",
                                 Animation::new(Duration::from_millis(1100))
@@ -1340,7 +1346,7 @@ impl Render for WorkbenchView {
             .items_center()
             .gap_1()
             .border_b_1()
-            .border_color(rgb(theme::BORDER))
+            .border_color(rgb(theme::BORDER_SUBTLE))
             .child(styled_button(
                 "subtab-params",
                 format!("Params ({})", draft.params.len()),
@@ -1412,12 +1418,7 @@ impl Render for WorkbenchView {
                 },
             ))
             .child(div().flex_1())
-            .child(
-                div()
-                    .text_size(px(11.))
-                    .text_color(rgb(theme::MUTED))
-                    .child("⌘+Enter to send"),
-            );
+            .child(shortcut_badge("⌘↵ to send"));
 
         // -------------------------------------------------------------------
         // 7. Request Config Tab Content Area
@@ -1889,19 +1890,32 @@ impl Render for WorkbenchView {
 
         let mut response_header = div()
             .px_6()
-            .py_2()
+            .py_2p5()
             .flex()
             .items_center()
-            .gap_3()
+            .gap_2p5()
             .bg(rgb(theme::HEADER))
             .border_b_1()
-            .border_color(rgb(theme::BORDER))
+            .border_color(rgb(theme::BORDER_SUBTLE))
             .child(
                 div()
-                    .font_weight(gpui::FontWeight::SEMIBOLD)
-                    .text_size(px(12.5))
-                    .text_color(rgb(theme::TEXT))
-                    .child("Response"),
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(
+                        div()
+                            .w(px(8.))
+                            .h(px(8.))
+                            .rounded_full()
+                            .bg(theme::brand_gradient()),
+                    )
+                    .child(
+                        div()
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                            .text_size(px(13.))
+                            .text_color(rgb(theme::TEXT))
+                            .child("Response"),
+                    ),
             )
             .child(styled_button(
                 "resp-tab-body",
@@ -2039,7 +2053,7 @@ impl Render for WorkbenchView {
         // 9. Bottom Status Bar (28px)
         // -------------------------------------------------------------------
         let status_bar = div()
-            .h(px(28.))
+            .h(px(32.))
             .flex_shrink_0()
             .px_4()
             .flex()
@@ -2047,7 +2061,7 @@ impl Render for WorkbenchView {
             .gap_3()
             .bg(rgb(theme::ACTIVITY_BAR))
             .border_t_1()
-            .border_color(rgb(theme::BORDER))
+            .border_color(rgb(theme::BORDER_SUBTLE))
             .text_size(px(11.))
             .text_color(rgb(theme::MUTED))
             // Live pulsing beacon dot
@@ -2069,9 +2083,9 @@ impl Render for WorkbenchView {
                     ),
             )
             .child("Local Engine")
-            .child(div().text_color(rgb(theme::BORDER)).child("|"))
+            .child(div().text_color(rgb(theme::BORDER_SUBTLE)).child("|"))
             .child(format!("Environment: {environment_name}"))
-            .child(div().text_color(rgb(theme::BORDER)).child("|"))
+            .child(div().text_color(rgb(theme::BORDER_SUBTLE)).child("|"))
             .child(
                 div()
                     .flex()
@@ -2082,7 +2096,7 @@ impl Render for WorkbenchView {
             )
             .child(div().flex_1())
             .child(format!("{} open tabs", self.drafts.len()))
-            .child(div().text_color(rgb(theme::BORDER)).child("|"))
+            .child(div().text_color(rgb(theme::BORDER_SUBTLE)).child("|"))
             .child(shortcut_badge("⌘K Commands"))
             .child(shortcut_badge("⌘↵ Send"));
 

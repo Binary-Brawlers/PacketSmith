@@ -1,7 +1,7 @@
 //! Reusable UI component library for the PacketSmith desktop application.
 //!
 //! Provides standard badges, method pills, buttons, tabs, table cells,
-//! and card layouts adhering to the modern Obsidian/Slate design language.
+//! and card layouts adhering to the Aurora design language.
 
 use std::rc::Rc;
 use gpui::{
@@ -24,15 +24,15 @@ pub fn method_badge(method: &str) -> impl IntoElement {
         .flex()
         .items_center()
         .justify_center()
-        .px_2()
-        .py(px(1.5))
-        .rounded_sm()
+        .px_2p5()
+        .py(px(2.))
+        .rounded_md()
         .bg(rgb(bg_color))
         .border_1()
-        .border_color(rgba((text_color << 8) | 0x33))
+        .border_color(rgba((text_color << 8) | 0x66))
         .text_color(rgb(text_color))
         .font_family(typography::MONO_FONT)
-        .text_size(px(10.5))
+        .text_size(px(11.))
         .font_weight(gpui::FontWeight::BOLD)
         .child(method_upper)
 }
@@ -46,12 +46,12 @@ pub fn status_badge(status_code: u16, status_text: &str) -> impl IntoElement {
         .flex()
         .items_center()
         .gap_1p5()
-        .px_2p5()
+        .px_3()
         .py_1()
-        .rounded_md()
+        .rounded_lg()
         .bg(rgb(bg_color))
         .border_1()
-        .border_color(rgba((text_color << 8) | 0x44))
+        .border_color(rgba((text_color << 8) | 0x55))
         .text_color(rgb(text_color))
         .text_size(px(12.))
         .font_weight(gpui::FontWeight::SEMIBOLD)
@@ -65,10 +65,10 @@ pub fn metric_chip_icon(kind: super::icons::IconKind, label: impl Into<SharedStr
         .flex()
         .items_center()
         .gap_1p5()
-        .px_2()
+        .px_2p5()
         .py_1()
-        .rounded_md()
-        .bg(rgb(theme::SURFACE))
+        .rounded_lg()
+        .bg(rgb(theme::SURFACE_ELEVATED))
         .border_1()
         .border_color(rgb(theme::BORDER))
         .text_color(rgb(theme::TEXT_SECONDARY))
@@ -84,10 +84,10 @@ pub fn metric_chip(icon: &str, label: impl Into<SharedString>) -> impl IntoEleme
         .flex()
         .items_center()
         .gap_1()
-        .px_2()
+        .px_2p5()
         .py_1()
-        .rounded_md()
-        .bg(rgb(theme::SURFACE))
+        .rounded_lg()
+        .bg(rgb(theme::SURFACE_ELEVATED))
         .border_1()
         .border_color(rgb(theme::BORDER))
         .text_color(rgb(theme::TEXT_SECONDARY))
@@ -103,15 +103,15 @@ pub fn count_pill(count: usize) -> impl IntoElement {
         .flex()
         .items_center()
         .justify_center()
-        .px_1p5()
-        .py(px(0.5))
+        .px_2()
+        .py(px(1.))
         .rounded_full()
-        .bg(rgb(theme::SURFACE_ELEVATED))
+        .bg(rgb(theme::ACCENT_BG))
         .border_1()
-        .border_color(rgb(theme::BORDER))
-        .text_color(rgb(theme::MUTED))
-        .text_size(px(10.))
-        .font_weight(gpui::FontWeight::MEDIUM)
+        .border_color(rgba((theme::ACCENT << 8) | 0x55))
+        .text_color(rgb(theme::ACCENT_LIGHT))
+        .text_size(px(10.5))
+        .font_weight(gpui::FontWeight::SEMIBOLD)
         .child(count.to_string())
 }
 
@@ -172,43 +172,73 @@ pub fn styled_button<V: 'static>(
     let keyboard_action = action.clone();
 
     let (py, px, text_size, rounded) = match size {
-        ButtonSize::Small => (px(2.), px(8.), px(11.), px(4.)),
-        ButtonSize::Medium => (px(5.), px(12.), px(12.5), px(6.)),
-        ButtonSize::Large => (px(8.), px(16.), px(13.), px(6.)),
+        ButtonSize::Small => (px(3.), px(10.), px(11.5), px(6.)),
+        ButtonSize::Medium => (px(6.), px(14.), px(13.), px(8.)),
+        ButtonSize::Large => (px(9.), px(18.), px(13.5), px(10.)),
     };
 
-    let (bg, text, border, hover_bg) = match variant {
+    let (bg, text, border, hover_bg): (gpui::Background, u32, u32, gpui::Background) = match variant {
         ButtonVariant::Primary => (
-            theme::ACCENT,
+            theme::brand_gradient(),
             theme::INK,
-            theme::ACCENT,
-            theme::ACCENT_HOVER,
+            theme::ACCENT_DEEP,
+            theme::brand_gradient_hover(),
         ),
         ButtonVariant::Secondary => {
             if selected {
-                (theme::ACTIVE, theme::TEXT, theme::BORDER_FOCUS, theme::HOVER)
+                (
+                    rgb(theme::ACCENT_BG).into(),
+                    theme::ACCENT_LIGHT,
+                    theme::ACCENT,
+                    rgb(theme::HOVER).into(),
+                )
             } else {
-                (theme::SURFACE_ELEVATED, theme::TEXT, theme::BORDER, theme::HOVER)
+                (
+                    rgb(theme::SURFACE_ELEVATED).into(),
+                    theme::TEXT,
+                    theme::BORDER,
+                    rgb(theme::HOVER).into(),
+                )
             }
         }
         ButtonVariant::Ghost => {
             if selected {
-                (theme::SURFACE_ELEVATED, theme::TEXT, theme::BORDER, theme::HOVER)
+                (
+                    rgb(theme::ACCENT_BG).into(),
+                    theme::ACCENT_LIGHT,
+                    theme::ACCENT,
+                    rgb(theme::HOVER).into(),
+                )
             } else {
-                (0x00000000, theme::MUTED, 0x00000000, theme::HOVER)
+                (
+                    rgb(0x00000000).into(),
+                    theme::MUTED,
+                    0x00000000,
+                    rgb(theme::HOVER).into(),
+                )
             }
         }
         ButtonVariant::Danger => (
-            theme::DANGER_BG,
+            rgb(theme::DANGER_BG).into(),
             theme::DANGER,
-            theme::DANGER_BG,
-            0x5c1a1a,
+            theme::DANGER,
+            rgb(0x6b2020).into(),
         ),
         ButtonVariant::Tab => {
             if selected {
-                (theme::SURFACE_ELEVATED, theme::TEXT, theme::BORDER, theme::HOVER)
+                (
+                    rgb(theme::ACCENT_BG).into(),
+                    theme::TEXT,
+                    theme::ACCENT,
+                    rgb(theme::HOVER).into(),
+                )
             } else {
-                (0x00000000, theme::MUTED, 0x00000000, theme::HOVER)
+                (
+                    rgb(0x00000000).into(),
+                    theme::MUTED,
+                    0x00000000,
+                    rgb(theme::HOVER).into(),
+                )
             }
         }
     };
@@ -233,13 +263,14 @@ pub fn styled_button<V: 'static>(
         .px(px)
         .py(py)
         .rounded(rounded)
-        .bg(rgb(bg))
+        .bg(bg)
         .border_1()
         .border_color(rgb(border))
         .text_color(rgb(text))
         .text_size(text_size)
         .font_weight(font_weight)
-        .hover(move |s| s.bg(rgb(hover_bg)).text_color(rgb(if variant == ButtonVariant::Ghost && !selected { theme::TEXT } else { text })))
+        .when(variant == ButtonVariant::Primary, |el| el.shadow_sm())
+        .hover(move |s| s.bg(hover_bg).text_color(rgb(if variant == ButtonVariant::Ghost && !selected { theme::TEXT } else { text })))
         .focus(|s| s.border_color(rgb(theme::BORDER_FOCUS)))
         .child(label)
         .on_click(cx.listener(move |view, _, window, cx| action(view, window, cx)))
@@ -270,43 +301,73 @@ pub fn styled_icon_button<V: 'static>(
     let keyboard_action = action.clone();
 
     let (py, px, icon_size, text_size, rounded) = match size {
-        ButtonSize::Small => (px(2.5), px(6.), px(13.), px(11.), px(4.)),
-        ButtonSize::Medium => (px(5.), px(10.), px(15.), px(12.5), px(6.)),
-        ButtonSize::Large => (px(8.), px(14.), px(17.), px(13.), px(6.)),
+        ButtonSize::Small => (px(3.), px(8.), px(13.), px(11.5), px(6.)),
+        ButtonSize::Medium => (px(6.), px(12.), px(15.), px(13.), px(8.)),
+        ButtonSize::Large => (px(9.), px(16.), px(17.), px(13.5), px(10.)),
     };
 
-    let (bg, text, border, hover_bg) = match variant {
+    let (bg, text, border, hover_bg): (gpui::Background, u32, u32, gpui::Background) = match variant {
         ButtonVariant::Primary => (
-            theme::ACCENT,
+            theme::brand_gradient(),
             theme::INK,
-            theme::ACCENT,
-            theme::ACCENT_HOVER,
+            theme::ACCENT_DEEP,
+            theme::brand_gradient_hover(),
         ),
         ButtonVariant::Secondary => {
             if selected {
-                (theme::ACTIVE, theme::TEXT, theme::BORDER_FOCUS, theme::HOVER)
+                (
+                    rgb(theme::ACCENT_BG).into(),
+                    theme::ACCENT_LIGHT,
+                    theme::ACCENT,
+                    rgb(theme::HOVER).into(),
+                )
             } else {
-                (theme::SURFACE_ELEVATED, theme::TEXT, theme::BORDER, theme::HOVER)
+                (
+                    rgb(theme::SURFACE_ELEVATED).into(),
+                    theme::TEXT,
+                    theme::BORDER,
+                    rgb(theme::HOVER).into(),
+                )
             }
         }
         ButtonVariant::Ghost => {
             if selected {
-                (theme::SURFACE_ELEVATED, theme::TEXT, theme::BORDER, theme::HOVER)
+                (
+                    rgb(theme::ACCENT_BG).into(),
+                    theme::ACCENT_LIGHT,
+                    theme::ACCENT,
+                    rgb(theme::HOVER).into(),
+                )
             } else {
-                (0x00000000, theme::MUTED, 0x00000000, theme::HOVER)
+                (
+                    rgb(0x00000000).into(),
+                    theme::MUTED,
+                    0x00000000,
+                    rgb(theme::HOVER).into(),
+                )
             }
         }
         ButtonVariant::Danger => (
-            theme::DANGER_BG,
+            rgb(theme::DANGER_BG).into(),
             theme::DANGER,
-            theme::DANGER_BG,
-            0x5c1a1a,
+            theme::DANGER,
+            rgb(0x6b2020).into(),
         ),
         ButtonVariant::Tab => {
             if selected {
-                (theme::SURFACE_ELEVATED, theme::TEXT, theme::BORDER, theme::HOVER)
+                (
+                    rgb(theme::ACCENT_BG).into(),
+                    theme::TEXT,
+                    theme::ACCENT,
+                    rgb(theme::HOVER).into(),
+                )
             } else {
-                (0x00000000, theme::MUTED, 0x00000000, theme::HOVER)
+                (
+                    rgb(0x00000000).into(),
+                    theme::MUTED,
+                    0x00000000,
+                    rgb(theme::HOVER).into(),
+                )
             }
         }
     };
@@ -330,13 +391,14 @@ pub fn styled_icon_button<V: 'static>(
         .px(px)
         .py(py)
         .rounded(rounded)
-        .bg(rgb(bg))
+        .bg(bg)
         .border_1()
         .border_color(rgb(border))
         .text_color(rgb(text))
         .text_size(text_size)
         .font_weight(font_weight)
-        .hover(move |s| s.bg(rgb(hover_bg)).text_color(rgb(if variant == ButtonVariant::Ghost && !selected { theme::TEXT } else { text })))
+        .when(variant == ButtonVariant::Primary, |el| el.shadow_sm())
+        .hover(move |s| s.bg(hover_bg).text_color(rgb(if variant == ButtonVariant::Ghost && !selected { theme::TEXT } else { text })))
         .focus(|s| s.border_color(rgb(theme::BORDER_FOCUS)))
         .child(super::icons::icon(icon_kind, icon_size, rgb(text)));
 
@@ -377,9 +439,9 @@ pub fn section_header(
                 .gap_2()
                 .child(
                     div()
-                        .text_size(px(11.))
+                        .text_size(px(11.5))
                         .font_weight(gpui::FontWeight::BOLD)
-                        .text_color(rgb(theme::MUTED))
+                        .text_color(rgb(theme::TEXT_SECONDARY))
                         .child(title.into()),
                 )
                 .when_some(count, |el, c| el.child(count_pill(c))),
@@ -410,22 +472,22 @@ pub fn empty_state_card_icon<V: 'static>(
         .justify_center()
         .gap_3()
         .p_8()
-        .rounded_lg()
+        .rounded_xl()
         .bg(rgb(theme::SURFACE))
         .border_1()
         .border_color(rgb(theme::BORDER))
+        .shadow_md()
         .child(
             div()
                 .flex()
                 .items_center()
                 .justify_center()
-                .w(px(52.))
-                .h(px(52.))
-                .rounded_full()
-                .bg(rgb(theme::SURFACE_ELEVATED))
-                .border_1()
-                .border_color(rgb(theme::BORDER))
-                .child(super::icons::icon(icon_kind, px(24.), rgb(theme::ACCENT))),
+                .w(px(56.))
+                .h(px(56.))
+                .rounded_xl()
+                .bg(theme::brand_gradient())
+                .shadow_sm()
+                .child(super::icons::icon(icon_kind, px(26.), rgb(theme::INK))),
         )
         .child(
             div()
@@ -475,23 +537,23 @@ pub fn empty_state_card<V: 'static>(
         .justify_center()
         .gap_3()
         .p_8()
-        .rounded_lg()
+        .rounded_xl()
         .bg(rgb(theme::SURFACE))
         .border_1()
         .border_color(rgb(theme::BORDER))
+        .shadow_md()
         .child(
             div()
                 .flex()
                 .items_center()
                 .justify_center()
-                .w(px(48.))
-                .h(px(48.))
-                .rounded_full()
-                .bg(rgb(theme::SURFACE_ELEVATED))
-                .border_1()
-                .border_color(rgb(theme::BORDER))
+                .w(px(52.))
+                .h(px(52.))
+                .rounded_xl()
+                .bg(theme::brand_gradient())
+                .shadow_sm()
                 .text_size(px(22.))
-                .text_color(rgb(theme::ACCENT))
+                .text_color(rgb(theme::INK))
                 .child(icon.to_string()),
         )
         .child(
