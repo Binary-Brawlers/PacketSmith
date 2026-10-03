@@ -13,8 +13,9 @@ use `codesign`, `lipo`, and `hdiutil`; Windows builds use the NSIS compiler.
 | Windows | `PacketSmith-<version>-windows-x64-setup.exe` | Per-user NSIS installer with Start menu shortcut and uninstaller |
 | Windows | `PacketSmith-<version>-windows-x64.zip` | Portable folder for users who prefer not to install |
 
-Every published artifact is accompanied by a `.sha256` checksum file and a
-combined `SHA256SUMS.txt` on the release page.
+A combined `SHA256SUMS.txt` with SHA-256 checksums is published alongside the
+artifacts; each build job also uploads per-artifact `.sha256` files as workflow
+artifacts.
 
 ## Local Packaging
 
