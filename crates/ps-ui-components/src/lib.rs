@@ -458,6 +458,6 @@ mod tests {
         let white = Color::rgb(255, 255, 255);
         let black = Color::rgb(0, 0, 0);
         let ratio = white.contrast_ratio(&black);
-        assert!(ratio >= 21.0); // Maximum possible contrast is 21:1
+        assert!((ratio - 21.0).abs() < 21.0 * f32::EPSILON); // Allow floating-point rounding at 21:1.
     }
 }

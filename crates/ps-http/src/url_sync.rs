@@ -7,12 +7,34 @@ use crate::{HeaderEntry, QueryParam};
 #[derive(Debug, Clone, Default)]
 pub struct UrlSyncEngine;
 
+#[cfg(test)]
+mod persistence_tests {
+    use super::*;
+
+    #[test]
+    fn url_table_round_trip_keeps_templates_repeated_keys_equals_and_fragments() {
+        let input = "https://example.com/items?item={{id}}&item=a=b%26c#details";
+        let (base, params) = UrlSyncEngine::parse_url(input);
+        assert_eq!(base, "https://example.com/items#details");
+        assert_eq!(params[0].value, "{{id}}");
+        assert_eq!(params[1].value, "a=b&c");
+        assert_eq!(
+            UrlSyncEngine::build_url(&base, &params),
+            "https://example.com/items?item={{id}}&item=a%3Db%26c#details"
+        );
+    }
+}
+
 impl UrlSyncEngine {
     /// Parses a raw URL into its base path (scheme + authority + path) and a list of query parameters.
     pub fn parse_url(raw_url: &str) -> (String, Vec<QueryParam>) {
-        if let Some(query_idx) = raw_url.find('?') {
-            let base_url = raw_url[..query_idx].to_string();
-            let query_str = &raw_url[query_idx + 1..];
+        let (without_fragment, fragment) = raw_url
+            .split_once('#')
+            .map(|(base, fragment)| (base, format!("#{fragment}")))
+            .unwrap_or((raw_url, String::new()));
+        if let Some(query_idx) = without_fragment.find('?') {
+            let base_url = format!("{}{fragment}", &without_fragment[..query_idx]);
+            let query_str = &without_fragment[query_idx + 1..];
             let params = Self::parse_query_string(query_str);
             (base_url, params)
         } else {
@@ -38,8 +60,17 @@ impl UrlSyncEngine {
             }
         }
 
+        let (base_url, fragment) = base_url
+            .split_once('#')
+            .map(|(base, fragment)| (base, format!("#{fragment}")))
+            .unwrap_or((base_url, String::new()));
         let separator = if base_url.contains('?') { "&" } else { "?" };
-        format!("{}{}{}", base_url, separator, query_parts.join("&"))
+        format!(
+            "{}{}{}{fragment}",
+            base_url,
+            separator,
+            query_parts.join("&")
+        )
     }
 
     /// Parses a raw query string into `QueryParam` structs.
@@ -140,12 +171,26 @@ impl UrlSyncEngine {
     }
 
     pub fn percent_encode(input: &str) -> String {
-        url::form_urlencoded::byte_serialize(input.as_bytes()).collect()
+        let parsed = ps_variable::parse_template(input);
+        let mut encoded = String::new();
+        let mut offset = 0;
+        for reference in parsed.references.iter().filter(|r| r.valid && !r.escaped) {
+            encoded.extend(url::form_urlencoded::byte_serialize(
+                &input.as_bytes()[offset..reference.range.start],
+            ));
+            encoded.push_str(&input[reference.range.clone()]);
+            offset = reference.range.end;
+        }
+        encoded.extend(url::form_urlencoded::byte_serialize(
+            &input.as_bytes()[offset..],
+        ));
+        encoded
     }
 
     pub fn percent_decode(input: &str) -> String {
-        url::form_urlencoded::parse(input.as_bytes())
-            .map(|(k, _)| k.into_owned())
+        let pair = format!("value={input}");
+        url::form_urlencoded::parse(pair.as_bytes())
+            .map(|(_, value)| value.into_owned())
             .next()
             .unwrap_or_else(|| input.to_string())
     }

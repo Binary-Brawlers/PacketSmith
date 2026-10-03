@@ -202,10 +202,10 @@ mod tests {
     fn test_request_yaml_serialization() {
         let req = RequestDocument::new(
             "List Items",
-            ProtocolRequest::Http(HttpRequestPayload {
-                method: "GET".to_string(),
-                url: "https://api.example.com/items".to_string(),
-            }),
+            ProtocolRequest::Http(HttpRequestPayload::new(
+                "GET".to_string(),
+                "https://api.example.com/items".to_string(),
+            )),
         );
         let yaml = serialize_resource_to_yaml(&req).expect("serialize request");
         assert!(yaml.contains("List Items"));

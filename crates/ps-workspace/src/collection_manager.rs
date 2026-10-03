@@ -299,16 +299,32 @@ impl CollectionManager {
         name: &str,
         protocol: ps_domain::ProtocolRequest,
     ) -> Result<RequestDocument, WorkspaceError> {
+        self.create_request_document(collection_id, folder_id, RequestDocument::new(name, protocol))
+    }
+
+    /// Creates a complete request without losing editor fields or metadata.
+    pub fn create_request_document(
+        &mut self,
+        collection_id: ResourceId,
+        folder_id: Option<ResourceId>,
+        doc: RequestDocument,
+    ) -> Result<RequestDocument, WorkspaceError> {
+        if !self.collections.contains_key(&collection_id)
+            || folder_id.is_some_and(|id| self.folders.get(&id).is_none_or(|folder| folder.collection_id != collection_id)) {
+            return Err(WorkspaceError::NotFound(PathBuf::from("Request collection or folder")));
+        }
+        if self.requests.contains_key(&doc.id) {
+            return Err(WorkspaceError::Collision("Request ID already exists".into()));
+        }
         let parent_dir = if let Some(f_id) = folder_id {
             self.get_full_path(&f_id)?.parent().unwrap().to_path_buf()
         } else {
             self.get_full_path(&collection_id)?.parent().unwrap().to_path_buf()
         };
 
-        let slug = self.find_available_slug(&parent_dir, &slugify(name), REQUEST_EXT);
+        let slug = self.find_available_slug(&parent_dir, &slugify(&doc.name), REQUEST_EXT);
         let file_path = parent_dir.join(format!("{}{}", slug, REQUEST_EXT));
 
-        let doc = RequestDocument::new(name, protocol);
         let yaml = serialize_resource_to_yaml(&doc)?;
         fs::write(&file_path, yaml)?;
 
@@ -341,7 +357,18 @@ impl CollectionManager {
         request.updated_at = Utc::now();
         let path = self.get_full_path(&request.id)?;
         let yaml = serialize_resource_to_yaml(&request)?;
-        fs::write(path, yaml)?;
+        // Write beside the original and replace only after a complete flush.
+        let temporary = path.with_file_name(format!(".request-{}.tmp", ResourceId::new()));
+        let result = (|| -> std::io::Result<()> {
+            use std::io::Write;
+            let mut file = fs::OpenOptions::new().write(true).create_new(true).open(&temporary)?;
+            file.set_permissions(fs::metadata(&path)?.permissions())?;
+            file.write_all(yaml.as_bytes())?;
+            file.sync_all()?;
+            fs::rename(&temporary, &path)
+        })();
+        if result.is_err() { let _ = fs::remove_file(&temporary); }
+        result?;
         self.requests.insert(request.id, request);
         Ok(())
     }
@@ -896,10 +923,10 @@ mod tests {
                 col.id,
                 Some(folder.id),
                 "Get Order By ID",
-                ProtocolRequest::Http(HttpRequestPayload {
-                    method: "GET".to_string(),
-                    url: "https://api.store.com/orders/123".to_string(),
-                }),
+                ProtocolRequest::Http(HttpRequestPayload::new(
+                    "GET".to_string(),
+                    "https://api.store.com/orders/123".to_string(),
+                )),
             )
             .expect("create req");
         assert_eq!(req.name, "Get Order By ID");
@@ -940,10 +967,10 @@ mod tests {
                 col.id,
                 None,
                 "Login Request",
-                ProtocolRequest::Http(HttpRequestPayload {
-                    method: "POST".to_string(),
-                    url: "https://api.test.com/login".to_string(),
-                }),
+                ProtocolRequest::Http(HttpRequestPayload::new(
+                    "POST".to_string(),
+                    "https://api.test.com/login".to_string(),
+                )),
             )
             .expect("create req");
 

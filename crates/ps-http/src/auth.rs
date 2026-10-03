@@ -37,11 +37,20 @@ pub enum AuthError {
 }
 
 /// One applied credential header with its log-safe preview.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct AppliedHeader {
     pub name: String,
     /// Real wire value. Never log this directly; use [`AppliedHeader::redacted`].
     value: String,
+}
+
+impl fmt::Debug for AppliedHeader {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("AppliedHeader")
+            .field("name", &self.name)
+            .field("value", &"[REDACTED]")
+            .finish()
+    }
 }
 
 impl AppliedHeader {

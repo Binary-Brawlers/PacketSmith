@@ -6,6 +6,7 @@ use super::components::*;
 use super::environment_input::TextInput;
 use super::environment_view::EnvironmentView;
 use super::icons::{icon, IconKind};
+use super::requests::{self, reference_input, RequestEdit};
 use super::theme;
 use super::typography;
 use super::AppState;
@@ -13,15 +14,19 @@ use gpui::{
     anchored, deferred, div, point, prelude::*, px, rgb, rgba, Anchor, Animation, AnimationExt,
     App, Context, Entity, FocusHandle, Focusable, Role, SharedString, Window,
 };
-use ps_http::{
-    HeaderEntry, HttpBody, HttpMethod, HttpRequest, HttpResponse, QueryParam, UrlSyncEngine,
+use ps_domain::{
+    ApiKeyLocation, AuthConfig, HttpRequestPayload, ProtocolRequest, RequestDocument, ResourceId,
 };
+use ps_http::{HeaderEntry, HttpBody, HttpRequest, HttpResponse, QueryParam, UrlSyncEngine};
+use std::path::PathBuf;
 use std::time::Duration;
 
 gpui::actions!(
     request_workbench,
     [
         SendRequest,
+        SaveRequest,
+        DismissDialog,
         NewRequest,
         CloseTab,
         CommandPalette,
@@ -60,6 +65,7 @@ pub enum ResponseSubTab {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AuthType {
+    Saved,
     None,
     Bearer,
     Basic,
@@ -86,6 +92,7 @@ struct HeaderRow {
     value: Entity<TextInput>,
     description: Entity<TextInput>,
     enabled: bool,
+    is_secret: bool,
 }
 
 struct HistoryItem {
@@ -96,6 +103,13 @@ struct HistoryItem {
 }
 
 struct Draft {
+    document: RequestDocument,
+    workspace_path: Option<PathBuf>,
+    saved_edit: Option<RequestEdit>,
+    last_url: String,
+    last_params: Vec<QueryParam>,
+    raw_content_type: String,
+    api_key_location: ApiKeyLocation,
     id: usize,
     generation: usize,
     title: String,
@@ -120,6 +134,81 @@ struct Draft {
     is_dirty: bool,
 }
 
+impl Draft {
+    fn param_values(&self, cx: &App) -> Vec<QueryParam> {
+        self.params
+            .iter()
+            .map(|p| QueryParam {
+                key: p.key.read(cx).value(),
+                value: p.value.read(cx).value(),
+                enabled: p.enabled,
+                description: nonempty(p.description.read(cx).value()),
+            })
+            .collect()
+    }
+
+    fn edit(&self, cx: &App) -> RequestEdit {
+        let auth = match self.auth_type {
+            AuthType::Saved => self.document.auth.clone(),
+            AuthType::None => AuthConfig::None,
+            AuthType::Bearer => AuthConfig::Bearer {
+                token_secret_ref: self.bearer_token.read(cx).value(),
+            },
+            AuthType::Basic => AuthConfig::Basic {
+                username: self.basic_username.read(cx).value(),
+                password_secret_ref: nonempty(self.basic_password.read(cx).value()),
+            },
+            AuthType::ApiKey => AuthConfig::ApiKey {
+                key: self.api_key_name.read(cx).value(),
+                value_secret_ref: self.api_key_value.read(cx).value(),
+                location: self.api_key_location,
+            },
+        };
+        let auth = if auth == requests::auth_for_editor(&self.document.auth) {
+            self.document.auth.clone()
+        } else {
+            auth
+        };
+        let body = match self.body_type {
+            BodyType::None => HttpBody::None,
+            BodyType::Json => HttpBody::Json {
+                json_content: self.body.read(cx).value(),
+            },
+            BodyType::Raw | BodyType::FormData => HttpBody::Raw {
+                content: self.body.read(cx).value(),
+                content_type: self.raw_content_type.clone(),
+            },
+        };
+        RequestEdit {
+            auth,
+            http: HttpRequestPayload {
+                method: self.method.clone(),
+                url: self.url.read(cx).value(),
+                params: self.param_values(cx),
+                headers: self
+                    .headers
+                    .iter()
+                    .map(|h| HeaderEntry {
+                        name: h.key.read(cx).value(),
+                        value: h.value.read(cx).value(),
+                        enabled: h.enabled,
+                        is_secret: h.is_secret,
+                        description: nonempty(h.description.read(cx).value()),
+                    })
+                    .collect(),
+                body,
+            },
+        }
+    }
+}
+
+fn nonempty(value: String) -> Option<String> {
+    if value.is_empty() {
+        None
+    } else {
+        Some(value)
+    }
+}
 impl Drop for Draft {
     fn drop(&mut self) {
         if let Some(task) = self.running.take() {
@@ -142,6 +231,13 @@ pub struct WorkbenchView {
     command_palette_query: Entity<TextInput>,
     history: Vec<HistoryItem>,
     method_selector_open: bool,
+    saving: bool,
+    save_dialog: Option<usize>,
+    save_name: Entity<TextInput>,
+    save_collection: Option<ResourceId>,
+    closing: Option<usize>,
+    focus_dialog: bool,
+    focus_workbench: bool,
 }
 
 fn mono_input(
@@ -150,13 +246,15 @@ fn mono_input(
     compact: bool,
     cx: &mut Context<WorkbenchView>,
 ) -> Entity<TextInput> {
-    cx.new(|cx| {
+    let input = cx.new(|cx| {
         let mut inp = TextInput::new(value, placeholder, false, cx).mono();
         if compact {
             inp = inp.compact();
         }
         inp
-    })
+    });
+    cx.observe(&input, |_, _, cx| cx.notify()).detach();
+    input
 }
 
 fn secret_input(
@@ -164,11 +262,13 @@ fn secret_input(
     placeholder: &str,
     cx: &mut Context<WorkbenchView>,
 ) -> Entity<TextInput> {
-    cx.new(|cx| {
+    let input = cx.new(|cx| {
         TextInput::new(value, placeholder, true, cx)
             .mono()
             .compact()
-    })
+    });
+    cx.observe(&input, |_, _, cx| cx.notify()).detach();
+    input
 }
 
 impl std::fmt::Debug for WorkbenchView {
@@ -182,6 +282,11 @@ impl std::fmt::Debug for WorkbenchView {
 
 impl WorkbenchView {
     pub fn bind_keys(cx: &mut App) {
+        cx.bind_keys([gpui::KeyBinding::new(
+            "escape",
+            DismissDialog,
+            Some("RequestWorkbench"),
+        )]);
         for modifier in ["cmd", "ctrl"] {
             cx.bind_keys([
                 gpui::KeyBinding::new(
@@ -192,6 +297,11 @@ impl WorkbenchView {
                 gpui::KeyBinding::new(
                     &format!("{modifier}-t"),
                     NewRequest,
+                    Some("RequestWorkbench"),
+                ),
+                gpui::KeyBinding::new(
+                    &format!("{modifier}-s"),
+                    SaveRequest,
                     Some("RequestWorkbench"),
                 ),
                 gpui::KeyBinding::new(&format!("{modifier}-w"), CloseTab, Some("RequestWorkbench")),
@@ -233,6 +343,7 @@ impl WorkbenchView {
         let command_palette_query =
             cx.new(|cx| TextInput::new("", "Type a command or jump to request...", false, cx));
 
+        let save_name = mono_input("", "Request name", false, cx);
         let mut view = Self {
             focus: cx.focus_handle(),
             environments,
@@ -247,6 +358,13 @@ impl WorkbenchView {
             command_palette_query,
             history: Vec::new(),
             method_selector_open: false,
+            saving: false,
+            save_dialog: None,
+            save_name,
+            save_collection: None,
+            closing: None,
+            focus_dialog: false,
+            focus_workbench: true,
         };
 
         view.add_draft(
@@ -259,46 +377,178 @@ impl WorkbenchView {
     }
 
     fn add_draft(&mut self, title: String, method: &str, url: &str, cx: &mut Context<Self>) {
-        let id = self.next_id;
-        self.next_id += 1;
-
-        let (_, initial_params) = UrlSyncEngine::parse_url(url);
-        let param_rows: Vec<ParamRow> = initial_params
-            .into_iter()
-            .map(|p| ParamRow {
-                key: mono_input(&p.key, "Key", true, cx),
-                value: mono_input(&p.value, "Value", true, cx),
-                description: cx.new(|cx| TextInput::new("", "Description", false, cx).compact()),
-                enabled: p.enabled,
-            })
-            .collect();
-
-        self.drafts.push(Draft {
-            id,
-            generation: 0,
+        let mut document = RequestDocument::new(
             title,
-            method: method.to_uppercase(),
-            url: mono_input(url, "https://api.example.com/v1/resource", false, cx),
-            params: param_rows,
-            auth_type: AuthType::None,
-            bearer_token: mono_input("", "Token or {{token}}", false, cx),
-            basic_username: cx.new(|cx| TextInput::new("", "Username", false, cx).compact()),
-            basic_password: secret_input("", "Password", cx),
-            api_key_name: mono_input("X-API-Key", "Key Name", true, cx),
-            api_key_value: secret_input("", "Key Value", cx),
-            headers: vec![HeaderRow {
-                key: mono_input("Accept", "Header", true, cx),
-                value: mono_input("application/json", "Value", true, cx),
-                description: cx.new(|cx| TextInput::new("", "Description", false, cx).compact()),
+            ProtocolRequest::Http(HttpRequestPayload::new(method, url)),
+        );
+        document.auth = AuthConfig::None;
+        if let ProtocolRequest::Http(http) = &mut document.protocol {
+            http.headers.push(HeaderEntry {
+                name: "Accept".into(),
+                value: "application/json".into(),
                 enabled: true,
-            }],
-            body_type: BodyType::None,
-            body: mono_input(
-                "{\n  \"example\": \"value\"\n}",
-                "Paste JSON or payload here",
-                false,
+                is_secret: false,
+                description: None,
+            });
+        }
+        self.open_document(document, None, cx);
+    }
+
+    fn param_row(param: &QueryParam, cx: &mut Context<Self>) -> ParamRow {
+        ParamRow {
+            key: mono_input(&param.key, "Key", true, cx),
+            value: mono_input(&param.value, "Value", true, cx),
+            description: mono_input(
+                param.description.as_deref().unwrap_or(""),
+                "Description",
+                true,
                 cx,
             ),
+            enabled: param.enabled,
+        }
+    }
+
+    fn open_document(
+        &mut self,
+        document: RequestDocument,
+        workspace_path: Option<PathBuf>,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(index) = self
+            .drafts
+            .iter()
+            .position(|d| d.document.id == document.id && d.workspace_path == workspace_path)
+        {
+            self.active = index;
+            self.focus_workbench = true;
+            self.activity_mode = ActivityMode::Collections;
+            cx.notify();
+            return;
+        }
+        let ProtocolRequest::Http(http) = &document.protocol else {
+            return;
+        };
+        let (body_type, body, raw_content_type) = match &http.body {
+            HttpBody::None => (BodyType::None, "".to_string(), "text/plain".to_string()),
+            HttpBody::Json { json_content } => (
+                BodyType::Json,
+                json_content.clone(),
+                "application/json".to_string(),
+            ),
+            HttpBody::Raw {
+                content,
+                content_type,
+            } => (BodyType::Raw, content.clone(), content_type.clone()),
+            _ => {
+                self.drafts[self.active].message =
+                    "This body format is not supported by the desktop editor yet.".into();
+                cx.notify();
+                return;
+            }
+        };
+        let id = self.next_id;
+        self.next_id += 1;
+        let params = if http.params.is_empty() {
+            UrlSyncEngine::parse_url(&http.url).1
+        } else {
+            http.params.clone()
+        };
+        let (auth_type, bearer, username, password, key, value, location) = match &document.auth {
+            AuthConfig::None => (
+                AuthType::None,
+                String::new(),
+                String::new(),
+                String::new(),
+                "X-API-Key".into(),
+                String::new(),
+                ApiKeyLocation::Header,
+            ),
+            AuthConfig::Bearer { token_secret_ref } => (
+                AuthType::Bearer,
+                reference_input(token_secret_ref),
+                String::new(),
+                String::new(),
+                "X-API-Key".into(),
+                String::new(),
+                ApiKeyLocation::Header,
+            ),
+            AuthConfig::Basic {
+                username,
+                password_secret_ref,
+            } => (
+                AuthType::Basic,
+                String::new(),
+                username.clone(),
+                password_secret_ref
+                    .as_deref()
+                    .map(reference_input)
+                    .unwrap_or_default(),
+                "X-API-Key".into(),
+                String::new(),
+                ApiKeyLocation::Header,
+            ),
+            AuthConfig::ApiKey {
+                key,
+                value_secret_ref,
+                location,
+            } => (
+                AuthType::ApiKey,
+                String::new(),
+                String::new(),
+                String::new(),
+                key.clone(),
+                reference_input(value_secret_ref),
+                *location,
+            ),
+            _ => (
+                AuthType::Saved,
+                String::new(),
+                String::new(),
+                String::new(),
+                "X-API-Key".into(),
+                String::new(),
+                ApiKeyLocation::Header,
+            ),
+        };
+        let draft = Draft {
+            id,
+            generation: 0,
+            title: document.name.clone(),
+            method: http.method.clone(),
+            url: mono_input(&http.url, "https://api.example.com/v1/resource", false, cx),
+            params: params.iter().map(|p| Self::param_row(p, cx)).collect(),
+            last_url: http.url.clone(),
+            last_params: params,
+            raw_content_type,
+            api_key_location: location,
+            auth_type,
+            bearer_token: secret_input(&bearer, "Token or {{token}}", cx),
+            basic_username: mono_input(&username, "Username", true, cx),
+            basic_password: secret_input(&password, "Password or {{password}}", cx),
+            api_key_name: mono_input(&key, "Key Name", true, cx),
+            api_key_value: secret_input(&value, "Key Value or {{api_key}}", cx),
+            headers: http
+                .headers
+                .iter()
+                .map(|h| HeaderRow {
+                    key: mono_input(&h.name, "Header", true, cx),
+                    value: if h.is_secret {
+                        secret_input(&h.value, "Value", cx)
+                    } else {
+                        mono_input(&h.value, "Value", true, cx)
+                    },
+                    description: mono_input(
+                        h.description.as_deref().unwrap_or(""),
+                        "Description",
+                        true,
+                        cx,
+                    ),
+                    enabled: h.enabled,
+                    is_secret: h.is_secret,
+                })
+                .collect(),
+            body_type,
+            body: mono_input(&body, "Paste JSON or payload here", false, cx),
             response: None,
             response_text: String::new(),
             message: "Ready to send".into(),
@@ -306,15 +556,218 @@ impl WorkbenchView {
             sub_tab: RequestSubTab::Params,
             response_sub_tab: ResponseSubTab::Body,
             is_dirty: false,
-        });
-
+            saved_edit: None,
+            document,
+            workspace_path,
+        };
+        self.drafts.push(draft);
         self.active = self.drafts.len() - 1;
+        self.focus_workbench = true;
+        self.drafts[self.active].saved_edit = Some(self.drafts[self.active].edit(cx));
         self.activity_mode = ActivityMode::Collections;
         self.method_selector_open = false;
         cx.notify();
     }
 
+    fn refresh_drafts(&mut self, cx: &mut Context<Self>) {
+        for draft in &mut self.drafts {
+            for header in &draft.headers {
+                let name = header.key.read(cx).value();
+                let secret = header.is_secret
+                    || ps_request_engine::redact_sensitive_header(&name, "value") == "[REDACTED]";
+                if header.value.read(cx).password != secret {
+                    header.value.update(cx, |input, cx| {
+                        input.password = secret;
+                        cx.notify();
+                    });
+                }
+            }
+            let url = draft.url.read(cx).value();
+            let params = draft.param_values(cx);
+            if url != draft.last_url {
+                let mut parsed = UrlSyncEngine::parse_url(&url).1;
+                // Keep disabled rows, and metadata on matching enabled rows.
+                for (index, param) in parsed.iter_mut().enumerate() {
+                    if let Some(old) = params.iter().filter(|p| p.enabled).nth(index) {
+                        if old.key == param.key && old.value == param.value {
+                            param.description = old.description.clone();
+                        }
+                    }
+                }
+                parsed.extend(params.into_iter().filter(|p| !p.enabled));
+                draft.params = parsed.iter().map(|p| Self::param_row(p, cx)).collect();
+                draft.last_params = parsed;
+                draft.last_url = url;
+            } else if params != draft.last_params {
+                let base = UrlSyncEngine::parse_url(&url).0;
+                let updated = UrlSyncEngine::build_url(&base, &params);
+                draft.url.update(cx, |input, cx| {
+                    input.set_text(updated.clone());
+                    cx.notify();
+                });
+                draft.last_url = updated;
+                draft.last_params = params;
+            }
+            draft.is_dirty = draft.saved_edit.as_ref() != Some(&draft.edit(cx));
+        }
+    }
+
+    fn save(&mut self, cx: &mut Context<Self>) {
+        if self.saving {
+            return;
+        }
+        if let Some(id) = self.save_dialog {
+            self.persist_draft(
+                id,
+                Some((self.save_collection, self.save_name.read(cx).value())),
+                cx,
+            );
+            return;
+        }
+        self.refresh_drafts(cx);
+        let draft = &self.drafts[self.active];
+        let ws = self.environments.read(cx).ws();
+        if draft
+            .workspace_path
+            .as_ref()
+            .is_some_and(|path| path != &ws.workspace_path)
+        {
+            self.drafts[self.active].message =
+                "Reopen this request's workspace before saving.".into();
+            cx.notify();
+            return;
+        }
+        if draft.workspace_path.is_some() {
+            self.persist_draft(draft.id, None, cx);
+        } else {
+            self.save_dialog = Some(draft.id);
+            self.focus_dialog = true;
+            self.save_collection = ws.collection_manager.as_ref().and_then(|m| {
+                let mut collections: Vec<_> = m.collections().values().collect();
+                collections.sort_by(|a, b| {
+                    a.name
+                        .cmp(&b.name)
+                        .then(a.id.to_string().cmp(&b.id.to_string()))
+                });
+                collections.first().map(|c| c.id)
+            });
+            self.save_name.update(cx, |input, cx| {
+                input.set_text(draft.title.clone());
+                cx.notify();
+            });
+            cx.notify();
+        }
+    }
+
+    fn persist_draft(
+        &mut self,
+        id: usize,
+        destination: Option<(Option<ResourceId>, String)>,
+        cx: &mut Context<Self>,
+    ) {
+        if self.saving {
+            return;
+        }
+        self.refresh_drafts(cx);
+        let Some(draft) = self.drafts.iter().find(|d| d.id == id) else {
+            return;
+        };
+        let edit = draft.edit(cx);
+        if edit.validate_for_source(&draft.document).is_err() {
+            self.drafts.iter_mut().find(|d| d.id == id).unwrap().message =
+                requests::RequestSaveError::PlaintextCredential.to_string();
+            cx.notify();
+            return;
+        }
+        let source = draft.document.clone();
+        let saved = draft.workspace_path.is_some();
+        let workspace_path = self.environments.read(cx).ws().workspace_path.clone();
+        if self.environments.read(cx).ws().collection_manager.is_none() {
+            self.drafts[self.active].message =
+                "Open a workspace under Environments before saving.".into();
+            cx.notify();
+            return;
+        }
+        self.saving = true;
+        let saved_edit = edit.clone();
+        let path_to_scan = workspace_path.clone();
+        let task = self.runtime.spawn_blocking(move || {
+            let mut manager = ps_workspace::CollectionManager::scan(path_to_scan)?;
+            let result = if saved {
+                requests::save_existing(&mut manager, &source, &edit)
+            } else {
+                let (collection, name) = destination.expect("new request destination");
+                if name.trim().is_empty() {
+                    return Err(requests::RequestSaveError::MissingName);
+                }
+                let collection = match collection {
+                    Some(id) => id,
+                    None => manager.create_collection("Requests", None)?.id,
+                };
+                requests::save_new(&mut manager, collection, &source, &name, &edit)
+            };
+            result.map(|document| (manager, document))
+        });
+        cx.spawn(async move |this, cx| {
+            let result = task.await;
+            let _ = this.update(cx, |view, cx| {
+                view.saving = false;
+                match result {
+                    Ok(Ok((manager, document))) => {
+                        if view.environments.read(cx).ws().workspace_path == workspace_path {
+                            view.environments.update(cx, |env, cx| {
+                                env.ws_mut().resource_tree =
+                                    Some(ps_workspace::ResourceTree::from_manager(&manager));
+                                env.ws_mut().collection_manager = Some(manager);
+                                cx.notify();
+                            });
+                        }
+                        if let Some(draft) = view.drafts.iter_mut().find(|d| d.id == id) {
+                            draft.title = document.name.clone();
+                            draft.document = document;
+                            draft.workspace_path = Some(workspace_path);
+                            draft.saved_edit = Some(saved_edit);
+                            draft.message = "Request saved.".into();
+                            draft.is_dirty = draft.saved_edit.as_ref() != Some(&draft.edit(cx));
+                            if view.closing == Some(id) && !draft.is_dirty {
+                                view.closing = None;
+                                let index = view.drafts.iter().position(|d| d.id == id).unwrap();
+                                view.remove_tab_at(index, cx);
+                            }
+                        }
+                        view.save_dialog = None;
+                    }
+                    error => {
+                        if let Some(draft) = view.drafts.iter_mut().find(|d| d.id == id) {
+                            draft.message = match error {
+                                Ok(Err(e)) => e.to_string(),
+                                _ => "Could not save the request. Your draft is retained.".into(),
+                            };
+                        }
+                    }
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+        cx.notify();
+    }
+
     fn close_tab_at(&mut self, index: usize, cx: &mut Context<Self>) {
+        self.refresh_drafts(cx);
+        if let Some(draft) = self.drafts.get(index) {
+            if draft.is_dirty {
+                self.closing = Some(draft.id);
+                self.focus_dialog = true;
+                cx.notify();
+                return;
+            }
+        }
+        self.remove_tab_at(index, cx);
+    }
+
+    fn remove_tab_at(&mut self, index: usize, cx: &mut Context<Self>) {
+        self.focus_workbench = true;
         if self.drafts.is_empty() {
             self.add_draft("Untitled Request".into(), "GET", "", cx);
             self.active = 0;
@@ -338,24 +791,7 @@ impl WorkbenchView {
     }
 
     fn sync_params_to_url(&mut self, cx: &mut Context<Self>) {
-        if self.active >= self.drafts.len() {
-            return;
-        }
-        let draft = &mut self.drafts[self.active];
-        let raw_url = draft.url.read(cx).value();
-        let (base, _) = UrlSyncEngine::parse_url(&raw_url);
-        let params: Vec<QueryParam> = draft
-            .params
-            .iter()
-            .map(|p| QueryParam {
-                key: p.key.read(cx).value(),
-                value: p.value.read(cx).value(),
-                enabled: p.enabled,
-                description: None,
-            })
-            .collect();
-        let new_url = UrlSyncEngine::build_url(&base, &params);
-        draft.url.update(cx, |u, _| u.set_text(new_url));
+        self.refresh_drafts(cx);
         cx.notify();
     }
 
@@ -374,6 +810,10 @@ impl WorkbenchView {
     }
 
     fn send(&mut self, cx: &mut Context<Self>) {
+        if self.save_dialog.is_some() || self.closing.is_some() {
+            return;
+        }
+        self.refresh_drafts(cx);
         if self.active >= self.drafts.len() {
             return;
         }
@@ -382,112 +822,52 @@ impl WorkbenchView {
             return;
         }
 
-        let parsed_method = draft
-            .method
-            .parse::<HttpMethod>()
-            .unwrap_or(HttpMethod::Get);
-        let url_val = draft.url.read(cx).value();
-        let mut request = HttpRequest::new(parsed_method, url_val.trim());
-
-        // 1. Headers from Table
-        let mut headers: Vec<HeaderEntry> = draft
-            .headers
-            .iter()
-            .filter(|h| h.enabled)
-            .map(|h| HeaderEntry {
-                name: h.key.read(cx).value(),
-                value: h.value.read(cx).value(),
-                enabled: true,
-                is_secret: false,
-                description: None,
-            })
-            .collect();
-
-        // 2. Auth Injection
-        match draft.auth_type {
-            AuthType::None => {}
-            AuthType::Bearer => {
-                let token = draft.bearer_token.read(cx).value();
-                if !token.is_empty() {
-                    headers.push(HeaderEntry {
-                        name: "Authorization".into(),
-                        value: format!("Bearer {}", token.trim()),
-                        enabled: true,
-                        is_secret: true,
-                        description: Some("Bearer Token".into()),
-                    });
-                }
-            }
-            AuthType::Basic => {
-                let user = draft.basic_username.read(cx).value();
-                let pass = draft.basic_password.read(cx).value();
-                let raw_cred = format!("{user}:{pass}");
-                let encoded = simple_base64(raw_cred.as_bytes());
-                headers.push(HeaderEntry {
-                    name: "Authorization".into(),
-                    value: format!("Basic {encoded}"),
-                    enabled: true,
-                    is_secret: true,
-                    description: Some("Basic Authentication".into()),
-                });
-            }
-            AuthType::ApiKey => {
-                let key = draft.api_key_name.read(cx).value();
-                let val = draft.api_key_value.read(cx).value();
-                if !key.is_empty() && !val.is_empty() {
-                    headers.push(HeaderEntry {
-                        name: key.trim().into(),
-                        value: val.trim().into(),
-                        enabled: true,
-                        is_secret: true,
-                        description: Some("API Key".into()),
-                    });
-                }
-            }
-        }
-
-        // 3. Body Injection
-        let body_str = draft.body.read(cx).value();
-        match draft.body_type {
-            BodyType::None => {}
-            BodyType::Json => {
-                if !body_str.is_empty() {
-                    if !headers
-                        .iter()
-                        .any(|h| h.name.eq_ignore_ascii_case("content-type"))
-                    {
-                        headers.push(HeaderEntry {
-                            name: "Content-Type".into(),
-                            value: "application/json".into(),
-                            enabled: true,
-                            is_secret: false,
-                            description: None,
-                        });
+        let edit = draft.edit(cx);
+        let url_val = edit.http.url.clone();
+        let request = HttpRequest::from_payload(&edit.http);
+        let ws = self.environments.read(cx).ws();
+        let resolver = ws.variable_ui.resolver().clone();
+        let auth = if matches!(edit.auth, AuthConfig::Inherit) {
+            let mut chain = Vec::new();
+            if let Some(manager) = &ws.collection_manager {
+                let mut parent = manager.get_resource_parent(&draft.document.id);
+                while let Some(current) = parent {
+                    match current {
+                        ps_workspace::ResourceParent::Folder(id) => {
+                            if let Some(folder) = manager.folders().get(&id) {
+                                chain.push(folder.auth.clone());
+                            }
+                            parent = manager.get_resource_parent(&id);
+                        }
+                        ps_workspace::ResourceParent::Collection(id) => {
+                            if let Some(collection) = manager.collections().get(&id) {
+                                chain.push(collection.auth.clone());
+                            }
+                            break;
+                        }
                     }
-                    request.body = HttpBody::Json {
-                        json_content: body_str,
-                    };
                 }
             }
-            BodyType::FormData | BodyType::Raw => {
-                if !body_str.is_empty() {
-                    request.body = HttpBody::Raw {
-                        content: body_str,
-                        content_type: "text/plain".into(),
-                    };
-                }
+            chain
+                .into_iter()
+                .find(|auth| !matches!(auth, AuthConfig::Inherit))
+                .unwrap_or(AuthConfig::None)
+        } else {
+            edit.auth
+        };
+        let prepared = if draft.document.auth == auth || draft.auth_type == AuthType::Saved {
+            Ok((auth, resolver))
+        } else {
+            requests::prepare_session_auth(auth, resolver)
+        };
+        let (auth, resolver) = match prepared {
+            Ok(prepared) => prepared,
+            Err(error) => {
+                draft.message = error.to_string();
+                cx.notify();
+                return;
             }
-        }
-
-        request.headers = headers;
-
-        let resolver = self
-            .environments
-            .read(cx)
-            .ws()
-            .variable_ui
-            .resolver()
-            .clone();
+        };
 
         let id = draft.id;
         draft.generation += 1;
@@ -499,9 +879,9 @@ impl WorkbenchView {
         let history_method = draft.method.clone();
         let history_url = url_val.clone();
 
-        let task = self
-            .runtime
-            .spawn(ps_http::desktop::send_desktop_request(request, resolver));
+        let task = self.runtime.spawn(async move {
+            ps_http::desktop::send_desktop_request_with_auth(request, resolver, &auth).await
+        });
         draft.running = Some(task.abort_handle());
 
         cx.spawn(async move |this, cx| {
@@ -560,7 +940,21 @@ impl WorkbenchView {
 }
 
 impl Render for WorkbenchView {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.refresh_drafts(cx);
+        if self.focus_workbench && self.save_dialog.is_none() && self.closing.is_none() {
+            window.focus(&self.focus, cx);
+            self.focus_workbench = false;
+        }
+        if self.focus_dialog {
+            let focus = if self.save_dialog.is_some() {
+                self.save_name.focus_handle(cx)
+            } else {
+                self.focus.clone()
+            };
+            window.focus(&focus, cx);
+            self.focus_dialog = false;
+        }
         if !self.drafts.is_empty() && self.active >= self.drafts.len() {
             self.active = self.drafts.len() - 1;
         }
@@ -582,9 +976,12 @@ impl Render for WorkbenchView {
                         .requests()
                         .values()
                         .filter_map(|doc| match &doc.protocol {
-                            ps_domain::ProtocolRequest::Http(http) => {
-                                Some((doc.name.clone(), http.method.clone(), http.url.clone()))
-                            }
+                            ps_domain::ProtocolRequest::Http(http) => Some((
+                                doc.name.clone(),
+                                http.method.clone(),
+                                http.url.clone(),
+                                doc.clone(),
+                            )),
                             _ => None,
                         })
                         .collect::<Vec<_>>()
@@ -597,7 +994,7 @@ impl Render for WorkbenchView {
         let filter_query = self.sidebar_filter.read(cx).value().to_lowercase();
         let filtered_saved: Vec<_> = saved
             .into_iter()
-            .filter(|(name, method, url)| {
+            .filter(|(name, method, url, _)| {
                 if filter_query.is_empty() {
                     true
                 } else {
@@ -787,10 +1184,12 @@ impl Render for WorkbenchView {
                     );
                 }
 
-                for (index, (name, method, url)) in filtered_saved.into_iter().enumerate() {
+                for (index, (name, method, _url, document)) in
+                    filtered_saved.into_iter().enumerate()
+                {
                     let req_name = name.clone();
                     let req_method = method.clone();
-                    let req_url = url.clone();
+                    let workspace_path = self.environments.read(cx).ws().workspace_path.clone();
                     list = list.child(
                         div()
                             .id(SharedString::from(format!("saved-row-{index}")))
@@ -813,7 +1212,7 @@ impl Render for WorkbenchView {
                                     .child(req_name.clone()),
                             )
                             .on_click(cx.listener(move |s, _, _, cx| {
-                                s.add_draft(req_name.clone(), &req_method, &req_url, cx);
+                                s.open_document(document.clone(), Some(workspace_path.clone()), cx);
                             })),
                     );
                 }
@@ -1151,6 +1550,7 @@ impl Render for WorkbenchView {
                     .on_click(cx.listener(move |s, _, _, cx| {
                         if idx < s.drafts.len() {
                             s.active = idx;
+                            s.focus_workbench = true;
                             cx.notify();
                         }
                     })),
@@ -1308,8 +1708,6 @@ impl Render for WorkbenchView {
                                                                     move |s, _, _, cx| {
                                                                         s.drafts[s.active].method =
                                                                             m_str.clone();
-                                                                        s.drafts[s.active]
-                                                                            .is_dirty = true;
                                                                         s.method_selector_open =
                                                                             false;
                                                                         cx.notify();
@@ -1325,6 +1723,15 @@ impl Render for WorkbenchView {
                     )
                     // URL Input field
                     .child(div().flex_1().min_w_0().child(draft.url.clone()))
+                    .child(styled_button(
+                        "btn-save-req",
+                        if self.saving { "Saving…" } else { "Save" },
+                        ButtonVariant::Secondary,
+                        ButtonSize::Large,
+                        false,
+                        cx,
+                        |s, _, cx| s.save(cx),
+                    ))
                     // Primary Action: Send Button
                     .child(if draft.running.is_some() {
                         styled_icon_button(
@@ -1417,6 +1824,7 @@ impl Render for WorkbenchView {
             .child(styled_button(
                 "subtab-auth",
                 match draft.auth_type {
+                    AuthType::Saved => "Auth (Saved)",
                     AuthType::None => "Auth",
                     AuthType::Bearer => "Auth (Bearer)",
                     AuthType::Basic => "Auth (Basic)",
@@ -1575,8 +1983,7 @@ impl Render for WorkbenchView {
                         s.drafts[s.active].params.push(ParamRow {
                             key: mono_input("", "Key", true, cx),
                             value: mono_input("", "Value", true, cx),
-                            description: cx
-                                .new(|cx| TextInput::new("", "Description", false, cx).compact()),
+                            description: mono_input("", "Description", true, cx),
                             enabled: true,
                         });
                         cx.notify();
@@ -1649,6 +2056,11 @@ impl Render for WorkbenchView {
                 );
 
                 match auth_type {
+                    AuthType::Saved => {
+                        auth_col = auth_col.child(
+                            "Saved authentication is preserved. Select an auth type to replace it.",
+                        );
+                    }
                     AuthType::None => {
                         auth_col = auth_col.child(
                             div()
@@ -1822,10 +2234,9 @@ impl Render for WorkbenchView {
                                 s.drafts[s.active].headers.push(HeaderRow {
                                     key: mono_input("", "Header", true, cx),
                                     value: mono_input("", "Value", true, cx),
-                                    description: cx.new(|cx| {
-                                        TextInput::new("", "Description", false, cx).compact()
-                                    }),
+                                    description: mono_input("", "Description", true, cx),
                                     enabled: true,
+                                    is_secret: false,
                                 });
                                 cx.notify();
                             },
@@ -1841,9 +2252,9 @@ impl Render for WorkbenchView {
                                 s.drafts[s.active].headers.push(HeaderRow {
                                     key: mono_input("Content-Type", "Header", true, cx),
                                     value: mono_input("application/json", "Value", true, cx),
-                                    description: cx
-                                        .new(|cx| TextInput::new("", "", false, cx).compact()),
+                                    description: mono_input("", "Description", true, cx),
                                     enabled: true,
+                                    is_secret: false,
                                 });
                                 cx.notify();
                             },
@@ -2226,6 +2637,7 @@ impl Render for WorkbenchView {
         // 10. Assemble Root Layout
         // -------------------------------------------------------------------
         let mut root = div()
+            .relative()
             .size_full()
             .flex()
             .flex_col()
@@ -2236,10 +2648,25 @@ impl Render for WorkbenchView {
             .track_focus(&self.focus)
             .key_context("RequestWorkbench")
             .on_action(cx.listener(|s, _: &SendRequest, _, cx| s.send(cx)))
+            .on_action(cx.listener(|s, _: &SaveRequest, _, cx| s.save(cx)))
+            .on_action(cx.listener(|s, _: &DismissDialog, _, cx| {
+                if !s.saving {
+                    s.save_dialog = None;
+                    s.closing = None;
+                }
+                s.show_command_palette = false;
+                cx.notify();
+            }))
             .on_action(cx.listener(|s, _: &NewRequest, _, cx| {
+                if s.save_dialog.is_some() || s.closing.is_some() {
+                    return;
+                }
                 s.add_draft("Untitled Request".into(), "GET", "", cx)
             }))
             .on_action(cx.listener(|s, _: &CloseTab, _, cx| {
+                if s.save_dialog.is_some() || s.closing.is_some() {
+                    return;
+                }
                 let active = s.active;
                 s.close_tab_at(active, cx);
             }))
@@ -2305,6 +2732,221 @@ impl Render for WorkbenchView {
                 },
             ))
             .child(status_bar);
+
+        if let Some(id) = self.save_dialog {
+            let mut collections = self
+                .environments
+                .read(cx)
+                .ws()
+                .collection_manager
+                .as_ref()
+                .map(|m| {
+                    m.collections()
+                        .values()
+                        .map(|c| (c.id, c.name.clone()))
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+            collections.sort_by(|a, b| a.1.cmp(&b.1).then(a.0.to_string().cmp(&b.0.to_string())));
+            let mut destinations = div().flex().flex_col().gap_1();
+            if collections.is_empty() {
+                destinations =
+                    destinations.child("A Requests collection will be created in this workspace.");
+            } else {
+                for (collection_id, name) in collections {
+                    destinations = destinations.child(styled_button(
+                        format!("save-collection-{collection_id}"),
+                        name,
+                        ButtonVariant::Secondary,
+                        ButtonSize::Small,
+                        self.save_collection == Some(collection_id),
+                        cx,
+                        move |s, _, cx| {
+                            if !s.saving {
+                                s.save_collection = Some(collection_id);
+                                cx.notify();
+                            }
+                        },
+                    ));
+                }
+            }
+            let message = self
+                .drafts
+                .iter()
+                .find(|d| d.id == id)
+                .map(|d| d.message.clone())
+                .unwrap_or_default();
+            root = root.child(
+                div()
+                    .absolute()
+                    .inset_0()
+                    .occlude()
+                    .bg(rgba(0x00000088))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(
+                        div()
+                            .w(px(480.))
+                            .p_5()
+                            .rounded_lg()
+                            .bg(rgb(theme::SURFACE_ELEVATED))
+                            .border_1()
+                            .border_color(rgb(theme::BORDER))
+                            .shadow_lg()
+                            .flex()
+                            .flex_col()
+                            .gap_3()
+                            .child("Save request")
+                            .child(self.save_name.clone())
+                            .child("Collection")
+                            .child(destinations)
+                            .child(
+                                div()
+                                    .text_size(px(11.))
+                                    .text_color(rgb(theme::MUTED))
+                                    .child(message),
+                            )
+                            .child(
+                                div()
+                                    .flex()
+                                    .justify_end()
+                                    .gap_2()
+                                    .child(styled_button(
+                                        "cancel-save",
+                                        "Cancel",
+                                        ButtonVariant::Ghost,
+                                        ButtonSize::Medium,
+                                        false,
+                                        cx,
+                                        |s, _, cx| {
+                                            if !s.saving {
+                                                s.save_dialog = None;
+                                                s.closing = None;
+                                                cx.notify();
+                                            }
+                                        },
+                                    ))
+                                    .child(styled_button(
+                                        "confirm-save",
+                                        if self.saving { "Saving…" } else { "Save" },
+                                        ButtonVariant::Primary,
+                                        ButtonSize::Medium,
+                                        false,
+                                        cx,
+                                        move |s, _, cx| {
+                                            s.persist_draft(
+                                                id,
+                                                Some((
+                                                    s.save_collection,
+                                                    s.save_name.read(cx).value(),
+                                                )),
+                                                cx,
+                                            );
+                                        },
+                                    )),
+                            ),
+                    ),
+            );
+        } else if let Some(id) = self.closing {
+            let title = self
+                .drafts
+                .iter()
+                .find(|d| d.id == id)
+                .map(|d| d.title.clone())
+                .unwrap_or_default();
+            let message = self
+                .drafts
+                .iter()
+                .find(|d| d.id == id)
+                .map(|d| d.message.clone())
+                .unwrap_or_default();
+            root = root.child(
+                div()
+                    .absolute()
+                    .inset_0()
+                    .occlude()
+                    .bg(rgba(0x00000088))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(
+                        div()
+                            .w(px(480.))
+                            .p_5()
+                            .rounded_lg()
+                            .bg(rgb(theme::SURFACE_ELEVATED))
+                            .border_1()
+                            .border_color(rgb(theme::BORDER))
+                            .shadow_lg()
+                            .flex()
+                            .flex_col()
+                            .gap_3()
+                            .child(format!("Save changes to {title}?"))
+                            .child("This tab has unsaved changes.")
+                            .child(
+                                div()
+                                    .text_size(px(11.))
+                                    .text_color(rgb(theme::MUTED))
+                                    .child(message),
+                            )
+                            .child(
+                                div()
+                                    .flex()
+                                    .justify_end()
+                                    .gap_2()
+                                    .child(styled_button(
+                                        "cancel-close",
+                                        "Cancel",
+                                        ButtonVariant::Ghost,
+                                        ButtonSize::Medium,
+                                        false,
+                                        cx,
+                                        |s, _, cx| {
+                                            if !s.saving {
+                                                s.closing = None;
+                                                cx.notify();
+                                            }
+                                        },
+                                    ))
+                                    .child(styled_button(
+                                        "discard-close",
+                                        "Discard",
+                                        ButtonVariant::Danger,
+                                        ButtonSize::Medium,
+                                        false,
+                                        cx,
+                                        move |s, _, cx| {
+                                            if !s.saving {
+                                                s.closing = None;
+                                                if let Some(index) =
+                                                    s.drafts.iter().position(|d| d.id == id)
+                                                {
+                                                    s.remove_tab_at(index, cx);
+                                                }
+                                            }
+                                        },
+                                    ))
+                                    .child(styled_button(
+                                        "save-close",
+                                        if self.saving { "Saving…" } else { "Save" },
+                                        ButtonVariant::Primary,
+                                        ButtonSize::Medium,
+                                        false,
+                                        cx,
+                                        move |s, _, cx| {
+                                            if let Some(index) =
+                                                s.drafts.iter().position(|d| d.id == id)
+                                            {
+                                                s.active = index;
+                                                s.save(cx);
+                                            }
+                                        },
+                                    )),
+                            ),
+                    ),
+            );
+        }
 
         // Command Palette Modal Overlay
         if self.show_command_palette {
@@ -2519,42 +3161,6 @@ fn preview(bytes: &[u8]) -> String {
     preview
 }
 
-fn simple_base64(input: &[u8]) -> String {
-    const CHARSET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut out = String::new();
-    let mut i = 0;
-    while i < input.len() {
-        let b0 = input[i] as usize;
-        let b1 = if i + 1 < input.len() {
-            input[i + 1] as usize
-        } else {
-            0
-        };
-        let b2 = if i + 2 < input.len() {
-            input[i + 2] as usize
-        } else {
-            0
-        };
-
-        let triple = (b0 << 16) | (b1 << 8) | b2;
-
-        out.push(CHARSET[(triple >> 18) & 63] as char);
-        out.push(CHARSET[(triple >> 12) & 63] as char);
-        if i + 1 < input.len() {
-            out.push(CHARSET[(triple >> 6) & 63] as char);
-        } else {
-            out.push('=');
-        }
-        if i + 2 < input.len() {
-            out.push(CHARSET[triple & 63] as char);
-        } else {
-            out.push('=');
-        }
-        i += 3;
-    }
-    out
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2564,11 +3170,5 @@ mod tests {
         assert!(preview(br#"{"ok":true}"#).contains('\n'));
         let large = "é".repeat(PREVIEW_CHARS + 1);
         assert!(preview(large.as_bytes()).contains("Preview truncated"));
-    }
-
-    #[test]
-    fn test_simple_base64() {
-        assert_eq!(simple_base64(b"hello"), "aGVsbG8=");
-        assert_eq!(simple_base64(b"admin:secret"), "YWRtaW46c2VjcmV0");
     }
 }

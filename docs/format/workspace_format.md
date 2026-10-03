@@ -97,6 +97,15 @@ protocol:
   type: "http"
   method: "POST"
   url: "{{base_url}}/login"
+  headers:
+    - name: "Content-Type"
+      value: "application/json"
+      enabled: true
+      is_secret: false
+      description: "Request format"
+  body:
+    type: "json"
+    json_content: '{"username":"{{username}}"}'
 auth:
   type: "none"
 scripts:
@@ -139,3 +148,26 @@ updated_at: "2026-09-04T12:00:00Z"
 ## Secret Exclusion Rule
 
 Values marked with `is_secret: true` store references (`{{vault:SECRET_NAME}}`) rather than raw plaintext secrets when committed to version control. The actual secret values are held in the local OS keychain or encrypted vault.
+
+
+## HTTP editor persistence
+
+HTTP payloads optionally include `params`, `headers`, and `body`. Older payloads
+containing only `method` and `url` continue to load; missing lists are empty and
+missing bodies are `none`. Empty lists and `none` bodies are omitted from YAML.
+The desktop supports `none`, `json` (`json_content`), and `raw` (`content` plus
+`content_type`). Other body variants remain preserved in the domain model but
+cannot be opened by the current desktop editor.
+
+A nonempty `params` list is the full query table, including repeated keys,
+disabled rows, and descriptions. It takes precedence over query pairs mirrored
+in `url`; disabled rows are retained in files but never sent. When `params` is
+absent or empty, the URL query is used directly. A header row stores `name`,
+`value`, `enabled`, `is_secret`, and an optional `description`.
+
+Desktop saves reject new plaintext auth credentials and literal values in known
+sensitive or explicitly secret headers, including disabled rows. Use a complete
+reference such as `{{token}}` or `{{vault:AUTH_TOKEN}}`; Authorization may include
+its public `Bearer` or `Basic` scheme before the reference. Existing named auth
+references remain unchanged when their controls are not edited. Actual vault
+retrieval and domain enforcement still require the separate vault integration.

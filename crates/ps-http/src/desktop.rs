@@ -53,12 +53,63 @@ pub async fn send_desktop_request_with_auth(
 ) -> Result<HttpResponse, ExecutionError> {
     let applied = crate::auth::apply_auth(auth, &resolver).map_err(auth_error)?;
     let started = Instant::now();
+    let client = NetworkClientBuilder::new()
+        .with_redirect_policy(RedirectPolicy {
+            follow: false,
+            ..Default::default()
+        })
+        .build()
+        .map_err(|_| ExecutionError::Internal("Could not initialize the HTTP client.".into()))?;
+    let builder = build_request(&client, &request, &resolver, &applied)?;
+    let mut response = builder.send().await.map_err(network_error)?;
+    let status = response.status();
+    let version = format!("{:?}", response.version());
+    let mut headers = HashMap::new();
+    for (key, value) in response.headers() {
+        let safe = ps_request_engine::redact_sensitive_header(
+            key.as_str(),
+            value.to_str().unwrap_or("[binary]"),
+        );
+        headers
+            .entry(key.to_string())
+            .and_modify(|v: &mut String| {
+                v.push('\n');
+                v.push_str(&safe);
+            })
+            .or_insert(safe);
+    }
+    let mut body = Vec::new();
+    while let Some(chunk) = response.chunk().await.map_err(network_error)? {
+        if chunk.len() > DESKTOP_RESPONSE_LIMIT.saturating_sub(body.len()) {
+            return Err(ExecutionError::Protocol(
+                "Response exceeds the editor's 2 MiB limit.".into(),
+            ));
+        }
+        body.extend_from_slice(&chunk);
+    }
+    Ok(HttpResponse {
+        status_code: status.as_u16(),
+        status_text: status.canonical_reason().unwrap_or("").into(),
+        headers,
+        size_bytes: body.len(),
+        body_bytes: body,
+        duration_ms: started.elapsed().as_millis() as u64,
+        http_version: version,
+    })
+}
+/// Shared preparation for file-backed and interactive HTTP requests.
+pub(crate) fn build_request(
+    client: &reqwest::Client,
+    request: &HttpRequest,
+    resolver: &VariableResolver,
+    applied: &crate::auth::AppliedAuth,
+) -> Result<reqwest::RequestBuilder, ExecutionError> {
     let mut resolved = request.clone();
-    resolved.raw_url = resolve(&resolver, &request.raw_url)?;
+    resolved.raw_url = resolve(resolver, &request.raw_url)?;
     for param in &mut resolved.params {
         if param.enabled {
-            param.key = resolve(&resolver, &param.key)?;
-            param.value = resolve(&resolver, &param.value)?;
+            param.key = resolve(resolver, &param.key)?;
+            param.value = resolve(resolver, &param.value)?;
         }
     }
     let mut url = resolved
@@ -79,19 +130,12 @@ pub async fn send_desktop_request_with_auth(
     }
     let method = reqwest::Method::from_bytes(request.method.as_str().as_bytes())
         .map_err(|_| ExecutionError::Protocol("Enter a valid HTTP method.".into()))?;
-    let client = NetworkClientBuilder::new()
-        .with_redirect_policy(RedirectPolicy {
-            follow: false,
-            ..Default::default()
-        })
-        .build()
-        .map_err(|_| ExecutionError::Internal("Could not initialize the HTTP client.".into()))?;
     let mut builder = client.request(method, url);
     let mut user_header_names: Vec<String> = Vec::new();
     let mut cookie_values: Vec<String> = Vec::new();
     for header in request.headers.iter().filter(|h| h.enabled) {
-        let name = resolve(&resolver, &header.name)?;
-        let value = resolve(&resolver, &header.value)?;
+        let name = resolve(resolver, &header.name)?;
+        let value = resolve(resolver, &header.value)?;
         let name = reqwest::header::HeaderName::from_bytes(name.as_bytes())
             .map_err(|_| ExecutionError::Protocol("A header name is invalid.".into()))?;
         if name == reqwest::header::COOKIE {
@@ -150,10 +194,10 @@ pub async fn send_desktop_request_with_auth(
             {
                 builder = builder.header(reqwest::header::CONTENT_TYPE, content_type);
             }
-            builder = builder.body(resolve(&resolver, content)?);
+            builder = builder.body(resolve(resolver, content)?);
         }
         HttpBody::Json { json_content } => {
-            let content = resolve(&resolver, json_content)?;
+            let content = resolve(resolver, json_content)?;
             serde_json::from_str::<serde_json::Value>(&content)
                 .map_err(|_| ExecutionError::Protocol("Request body is not valid JSON.".into()))?;
             if !request
@@ -171,42 +215,9 @@ pub async fn send_desktop_request_with_auth(
             ))
         }
     }
-    let mut response = builder.send().await.map_err(network_error)?;
-    let status = response.status();
-    let version = format!("{:?}", response.version());
-    let mut headers = HashMap::new();
-    for (key, value) in response.headers() {
-        let safe = ps_request_engine::redact_sensitive_header(
-            key.as_str(),
-            value.to_str().unwrap_or("[binary]"),
-        );
-        headers
-            .entry(key.to_string())
-            .and_modify(|v: &mut String| {
-                v.push('\n');
-                v.push_str(&safe);
-            })
-            .or_insert(safe);
-    }
-    let mut body = Vec::new();
-    while let Some(chunk) = response.chunk().await.map_err(network_error)? {
-        if chunk.len() > DESKTOP_RESPONSE_LIMIT.saturating_sub(body.len()) {
-            return Err(ExecutionError::Protocol(
-                "Response exceeds the editor's 2 MiB limit.".into(),
-            ));
-        }
-        body.extend_from_slice(&chunk);
-    }
-    Ok(HttpResponse {
-        status_code: status.as_u16(),
-        status_text: status.canonical_reason().unwrap_or("").into(),
-        headers,
-        size_bytes: body.len(),
-        body_bytes: body,
-        duration_ms: started.elapsed().as_millis() as u64,
-        http_version: version,
-    })
+    Ok(builder)
 }
+
 fn network_error(error: reqwest::Error) -> ExecutionError {
     if error.is_timeout() {
         ExecutionError::Timeout(30_000)
@@ -235,8 +246,17 @@ mod tests {
                 let count = socket.read(&mut chunk).await.unwrap();
                 assert_ne!(count, 0);
                 bytes.extend_from_slice(&chunk[..count]);
-                if bytes.windows(4).any(|w| w == b"\r\n\r\n") {
-                    break;
+                if let Some(header_end) = bytes.windows(4).position(|w| w == b"\r\n\r\n") {
+                    let headers =
+                        String::from_utf8_lossy(&bytes[..header_end]).to_ascii_lowercase();
+                    let length = headers
+                        .lines()
+                        .find_map(|line| line.strip_prefix("content-length: "))
+                        .and_then(|length| length.parse::<usize>().ok())
+                        .unwrap_or(0);
+                    if bytes.len() >= header_end + 4 + length {
+                        break;
+                    }
                 }
             }
             socket
@@ -246,6 +266,64 @@ mod tests {
             String::from_utf8(bytes).unwrap()
         });
         (address, server)
+    }
+
+    #[tokio::test]
+    async fn persisted_payload_sends_complete_body_headers_and_query_without_duplicates() {
+        let (address, server) = serve_once_capture_wire().await;
+        let mut payload = ps_domain::HttpRequestPayload::new(
+            "POST",
+            format!("http://{address}/items?item={{{{item}}}}&item=two"),
+        );
+        payload.params = vec![
+            crate::QueryParam {
+                key: "item".into(),
+                value: "{{item}}".into(),
+                enabled: true,
+                description: None,
+            },
+            crate::QueryParam {
+                key: "item".into(),
+                value: "two".into(),
+                enabled: true,
+                description: None,
+            },
+            crate::QueryParam {
+                key: "skip".into(),
+                value: "skip".into(),
+                enabled: false,
+                description: None,
+            },
+        ];
+        payload.headers = vec![crate::HeaderEntry {
+            name: "X-Test".into(),
+            value: "{{item}}".into(),
+            enabled: true,
+            is_secret: false,
+            description: Some("Keep description".into()),
+        }];
+        payload.body = HttpBody::Json {
+            json_content: "{\"value\":\"{{item}}\"}".into(),
+        };
+        let json = serde_json::to_string(&payload).unwrap();
+        let reopened = serde_json::from_str(&json).unwrap();
+        let resolver =
+            VariableResolver::new().with_globals(HashMap::from([("item".into(), "one".into())]));
+        let response = send_desktop_request(HttpRequest::from_payload(&reopened), resolver)
+            .await
+            .unwrap();
+        assert_eq!(response.status_code, 200);
+        let wire = server.await.unwrap();
+        assert!(
+            wire.starts_with("POST /items?item=one&item=two HTTP/1.1"),
+            "{wire}"
+        );
+        assert!(wire.to_ascii_lowercase().contains("x-test: one"));
+        assert!(wire
+            .to_ascii_lowercase()
+            .contains("content-type: application/json"));
+        assert!(wire.ends_with("{\"value\":\"one\"}"));
+        assert!(!wire.contains("skip"));
     }
 
     #[test]

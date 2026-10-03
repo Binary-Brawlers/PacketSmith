@@ -19,6 +19,7 @@ pub use window::{WindowManager, WindowState};
 pub use workbench::{CloseTabError, ClosedTabInfo, SplitTree, WorkbenchPane, WorkbenchState};
 
 pub mod environments;
+pub mod requests;
 #[cfg(feature = "gpui-ui")]
 mod environment_input;
 #[cfg(feature = "gpui-ui")]

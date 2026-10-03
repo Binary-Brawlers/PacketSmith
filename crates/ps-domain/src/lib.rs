@@ -108,12 +108,93 @@ pub enum ProtocolRequest {
     Soap(SoapRequestPayload),
 }
 
-/// Minimal placeholder payload for HTTP requests within the domain crate.
+/// File-backed HTTP request, shared by desktop and protocol execution.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HttpRequestPayload {
     pub method: String,
     pub url: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub params: Vec<QueryParam>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub headers: Vec<HeaderEntry>,
+    #[serde(default, skip_serializing_if = "HttpBody::is_none")]
+    pub body: HttpBody,
 }
+
+impl HttpRequestPayload {
+    pub fn new(method: impl Into<String>, url: impl Into<String>) -> Self {
+        Self { method: method.into(), url: url.into(), params: Vec::new(), headers: Vec::new(), body: HttpBody::None }
+    }
+}
+
+#[cfg(test)]
+mod http_persistence_tests {
+    use super::*;
+
+    #[test]
+    fn legacy_http_payloads_default_new_fields_and_keep_minimal_serialization() {
+        let json = r#"{"type":"http","method":"GET","url":"https://example.com"}"#;
+        let protocol: ProtocolRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(protocol, ProtocolRequest::Http(HttpRequestPayload::new("GET", "https://example.com")));
+        assert_eq!(serde_json::to_value(protocol).unwrap(), serde_json::from_str::<serde_json::Value>(json).unwrap());
+    }
+}
+
+/// Key-value query parameter with enable toggle.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct QueryParam {
+    pub key: String,
+    pub value: String,
+    pub enabled: bool,
+    pub description: Option<String>,
+}
+
+/// Key-value HTTP header with enable toggle and secret mask flag.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HeaderEntry {
+    pub name: String,
+    pub value: String,
+    pub enabled: bool,
+    pub is_secret: bool,
+    pub description: Option<String>,
+}
+
+/// HTTP request body payload variants.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum HttpBody {
+    #[default]
+    None,
+    Raw {
+        content: String,
+        content_type: String,
+    },
+    Json {
+        json_content: String,
+    },
+    FormUrlEncoded {
+        fields: Vec<QueryParam>,
+    },
+    Multipart {
+        fields: Vec<MultipartField>,
+    },
+    Binary {
+        file_path: String,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MultipartField {
+    pub name: String,
+    pub value: String,
+    pub is_file: bool,
+    pub content_type: Option<String>,
+}
+
+impl HttpBody {
+    pub fn is_none(&self) -> bool { matches!(self, Self::None) }
+}
+
 
 /// GraphQL request configuration.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -505,10 +586,10 @@ mod tests {
     fn test_request_document_serialization() {
         let doc = RequestDocument::new(
             "Get Users",
-            ProtocolRequest::Http(HttpRequestPayload {
-                method: "GET".to_string(),
-                url: "https://api.example.com/users".to_string(),
-            }),
+            ProtocolRequest::Http(HttpRequestPayload::new(
+                "GET".to_string(),
+                "https://api.example.com/users".to_string(),
+            )),
         );
         let serialized = serde_json::to_string_pretty(&doc).expect("Serialization failed");
         let deserialized: RequestDocument =

@@ -506,10 +506,10 @@ mod tests {
     fn make_test_request(name: &str) -> RequestDocument {
         RequestDocument::new(
             name,
-            ProtocolRequest::Http(HttpRequestPayload {
-                method: "GET".to_string(),
-                url: format!("https://api.test.com/{}", name),
-            }),
+            ProtocolRequest::Http(HttpRequestPayload::new(
+                "GET".to_string(),
+                format!("https://api.test.com/{}", name),
+            )),
         )
     }
 

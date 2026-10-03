@@ -1,6 +1,42 @@
 # Desktop workbench and text rendering
 
-## Changes
+## Save/open workflow validation
+
+The native editor now saves new requests into a selected collection, updates
+existing requests in place, and loads headers, query rows, auth, and raw/JSON bodies.
+Save is available from the button, File menu, and Cmd/Ctrl+S. Changed tabs show a
+dirty marker and close with Save, Discard, or Cancel. Saving runs off the UI thread,
+checks for external edits, and rejects plaintext credentials in auth controls and
+sensitive headers. Unsupported body formats are rejected when opening a request.
+
+Automated validation passed:
+
+```sh
+cargo test --workspace
+cargo test -p packetsmith-app --features gpui-ui
+cargo clippy --workspace --all-targets --features packetsmith-app/gpui-ui -- -D warnings
+cargo build -p packetsmith-app --features gpui-ui
+```
+
+The workspace suite has 101 passing tests; the GPUI-enabled application has 21.
+Coverage includes legacy schema compatibility, complete persistence round trips,
+metadata retention, external edit/deletion conflicts, disabled sensitive rows,
+credential-reference validation, auth resolution before Basic encoding, and wire
+verification of reopened bodies, headers, and repeated parameters.
+
+The app was also exercised on Linux X11 under Xvfb with Mesa llvmpipe/OpenGL:
+opening and reselecting a saved request, sending its JSON body/headers/query to a
+local fixture, editing and saving from the dirty-close dialog, reopening the
+updated request, creating a named request through the save dialog, and cancelling
+and discarding edits. The screenshots are direct native-window captures.
+macOS and Windows interaction checks remain pending. Repository-wide rustfmt
+checking still reports pre-existing formatting in the older shell/core files;
+the new request workflow and modified native view are formatted.
+
+- [New request save dialog](screenshots/request-save.png)
+- [Dirty tab close dialog](screenshots/request-close.png)
+
+## Initial integration changes
 
 The entry point previously constructed only `EnvironmentView`. It now constructs
 `WorkbenchView`, with Requests as the initial screen and Environments as a second
@@ -38,7 +74,7 @@ If labels are still missing, retain the terminal's font/rasterization/rendering
 errors and a screenshot. Do not mark this rendering issue verified until text is
 visible in both Requests and Environments.
 
-## Validation
+## Initial integration validation
 
 Passed:
 
@@ -62,6 +98,6 @@ Manual acceptance:
    `{{variable}}` in a request. Unresolved references must stop before sending.
 7. Verify keyboard traversal and Cmd/Ctrl+Enter and Cmd/Ctrl+T.
 
-Current limits: drafts are not saved, workspace requests open as session drafts,
-response previews are bounded, and redirects are disabled. Full native integration
-of persistence/history, splits, advanced body modes, and vault is separate work.
+Current limits: unsaved drafts and history are session-only, response previews
+are bounded, and redirects are disabled. Native tab/crash restore, persistent
+history, splits, advanced body modes, and vault integration remain separate work.

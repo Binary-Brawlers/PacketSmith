@@ -20,10 +20,7 @@ pub fn create_test_workspace_in(dir: &Path, name: &str) -> PathBuf {
 pub fn sample_http_get_request(name: &str, url: &str) -> RequestDocument {
     RequestDocument::new(
         name,
-        ProtocolRequest::Http(HttpRequestPayload {
-            method: "GET".to_string(),
-            url: url.to_string(),
-        }),
+        ProtocolRequest::Http(HttpRequestPayload::new("GET".to_string(), url.to_string())),
     )
 }
 

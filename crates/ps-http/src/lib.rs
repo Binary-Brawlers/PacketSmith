@@ -88,56 +88,7 @@ impl FromStr for HttpMethod {
     }
 }
 
-/// Key-value query parameter with enable toggle.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct QueryParam {
-    pub key: String,
-    pub value: String,
-    pub enabled: bool,
-    pub description: Option<String>,
-}
-
-/// Key-value HTTP header with enable toggle and secret mask flag.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct HeaderEntry {
-    pub name: String,
-    pub value: String,
-    pub enabled: bool,
-    pub is_secret: bool,
-    pub description: Option<String>,
-}
-
-/// HTTP request body payload variants.
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
-pub enum HttpBody {
-    #[default]
-    None,
-    Raw {
-        content: String,
-        content_type: String,
-    },
-    Json {
-        json_content: String,
-    },
-    FormUrlEncoded {
-        fields: Vec<QueryParam>,
-    },
-    Multipart {
-        fields: Vec<MultipartField>,
-    },
-    Binary {
-        file_path: String,
-    },
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct MultipartField {
-    pub name: String,
-    pub value: String,
-    pub is_file: bool,
-    pub content_type: Option<String>,
-}
+pub use ps_domain::{HeaderEntry, HttpBody, MultipartField, QueryParam};
 
 /// Comprehensive HTTP request representation.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -157,6 +108,18 @@ impl HttpRequest {
             params: Vec::new(),
             headers: Vec::new(),
             body: HttpBody::None,
+        }
+    }
+
+    /// A persisted parameter table replaces the URL query, retaining disabled rows
+    /// without sending them or duplicating the enabled pairs mirrored in the URL.
+    pub fn from_payload(payload: &ps_domain::HttpRequestPayload) -> Self {
+        Self {
+            method: payload.method.parse().unwrap(),
+            raw_url: if payload.params.is_empty() { payload.url.clone() } else { UrlSyncEngine::parse_url(&payload.url).0 },
+            params: payload.params.clone(),
+            headers: payload.headers.clone(),
+            body: payload.body.clone(),
         }
     }
 
@@ -263,22 +226,10 @@ impl ProtocolExecutor for HttpExecutor {
             return Err(ExecutionError::Cancelled);
         }
 
-        let method = match reqwest::Method::from_bytes(http_payload.method.as_bytes()) {
-            Ok(m) => m,
-            Err(_) => reqwest::Method::GET,
-        };
-
         // Attach auth query pairs before sending; the event/log URL stays redacted.
-        let mut wire_url = resolved_url.value.clone();
         let mut display_url = resolved_url.display_value.clone();
         if !applied_auth.query_params().is_empty() {
-            if let Ok(mut parsed) = Url::parse(&wire_url) {
-                parsed
-                    .query_pairs_mut()
-                    .extend_pairs(applied_auth.query_params().iter().map(|(k, v)| (k, v)));
-                wire_url = parsed.to_string();
-            }
-            if let Ok(mut parsed) = Url::parse(&display_url).or_else(|_| Url::parse(&wire_url)) {
+            if let Ok(mut parsed) = Url::parse(&display_url) {
                 let mut pairs: Vec<(String, String)> = parsed
                     .query_pairs()
                     .map(|(k, v)| (k.into_owned(), v.into_owned()))
@@ -293,25 +244,8 @@ impl ProtocolExecutor for HttpExecutor {
             }
         }
 
-        let mut request_builder = self.client.request(method, &wire_url);
-        for header in applied_auth.headers() {
-            // Header names were validated at apply time; re-validate at the wire
-            // boundary and fail closed without echoing values.
-            let name = reqwest::header::HeaderName::from_bytes(header.name.as_bytes())
-                .map_err(|_| ExecutionError::Protocol("An auth header name is invalid.".into()))?;
-            let value = reqwest::header::HeaderValue::from_str(header.wire_value())
-                .map_err(|_| ExecutionError::Protocol("An auth header value is invalid.".into()))?;
-            request_builder = request_builder.header(name, value);
-        }
-        if !applied_auth.cookies().is_empty() {
-            let cookie_value = applied_auth
-                .cookies()
-                .iter()
-                .map(|(k, v)| format!("{k}={v}"))
-                .collect::<Vec<_>>()
-                .join("; ");
-            request_builder = request_builder.header(reqwest::header::COOKIE, cookie_value);
-        }
+        let http_request = HttpRequest::from_payload(http_payload);
+        let request_builder = desktop::build_request(&self.client, &http_request, &ctx.variable_resolver, &applied_auth)?;
 
         let start = Instant::now();
         event_sink
@@ -465,10 +399,10 @@ mod tests {
 
         let mut doc = RequestDocument::new(
             "Secure",
-            ProtocolRequest::Http(ps_domain::HttpRequestPayload {
-                method: "GET".to_string(),
-                url: format!("http://{address}/secure"),
-            }),
+            ProtocolRequest::Http(ps_domain::HttpRequestPayload::new(
+                "GET".to_string(),
+                format!("http://{address}/secure"),
+            )),
         );
         doc.auth = ps_domain::AuthConfig::Bearer {
             token_secret_ref: "TOKEN".into(),
@@ -506,10 +440,10 @@ mod tests {
 
         let mut doc = RequestDocument::new(
             "Secure",
-            ProtocolRequest::Http(ps_domain::HttpRequestPayload {
-                method: "GET".to_string(),
-                url: "http://127.0.0.1:1/unused".to_string(),
-            }),
+            ProtocolRequest::Http(ps_domain::HttpRequestPayload::new(
+                "GET".to_string(),
+                "http://127.0.0.1:1/unused".to_string(),
+            )),
         );
         doc.auth = ps_domain::AuthConfig::Bearer {
             token_secret_ref: "MISSING".into(),

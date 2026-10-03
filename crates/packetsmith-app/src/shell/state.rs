@@ -275,10 +275,10 @@ mod tests {
 
         let req = RequestDocument::new(
             "Users API",
-            ProtocolRequest::Http(HttpRequestPayload {
-                method: "GET".to_string(),
-                url: "https://api.example.com/users".to_string(),
-            }),
+            ProtocolRequest::Http(HttpRequestPayload::new(
+                "GET".to_string(),
+                "https://api.example.com/users".to_string(),
+            )),
         );
 
         ws.open_tab(req);

@@ -391,10 +391,10 @@ mod tests {
                 col.id,
                 Some(folder.id),
                 "List Repos",
-                ProtocolRequest::Http(HttpRequestPayload {
-                    method: "GET".to_string(),
-                    url: "https://api.github.com/user/repos".to_string(),
-                }),
+                ProtocolRequest::Http(HttpRequestPayload::new(
+                    "GET".to_string(),
+                    "https://api.github.com/user/repos".to_string(),
+                )),
             )
             .expect("create req");
 
