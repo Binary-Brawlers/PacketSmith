@@ -4,12 +4,21 @@
 
 Download the latest universal DMG from the
 [releases page](https://github.com/Binary-Brawlers/PacketSmith/releases), open
-it, and drag **PacketSmith** into **Applications**. Developer release builds are
-ad-hoc signed; if macOS blocks the first launch, remove the quarantine flag:
+it, and drag **PacketSmith** into **Applications**.
+
+Developer release builds are ad-hoc signed but not notarized, so Gatekeeper
+shows "Apple could not verify PacketSmith is free of malware" on first launch.
+Clear the quarantine flag after installing:
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/PacketSmith.app
 ```
+
+Alternatively, try to open the app once, then go to **System Settings >
+Privacy & Security**, scroll to **Security**, click **Open Anyway** for
+PacketSmith, and confirm with your password. On macOS 15 and later the
+right-click **Open** bypass no longer works; use one of these two options.
+Releases signed with a Developer ID and notarized do not require either step.
 
 ## Prerequisites
 
