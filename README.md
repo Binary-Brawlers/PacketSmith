@@ -50,7 +50,13 @@ Refer to [`docs/setup/`](docs/setup/) for platform-specific instructions.
 
 ### Start the Application
 
-From the repository root, run:
+Prebuilt installers are published on the
+[releases page](https://github.com/Binary-Brawlers/PacketSmith/releases):
+a universal DMG for macOS and a per-user installer (plus portable zip) for
+Windows. See [packaging documentation](docs/release/packaging.md) for signing
+details and the current unsigned developer release policy.
+
+To build and run from source, from the repository root run:
 
 ```bash
 cargo run -p packetsmith-app --features gpui-ui
@@ -68,11 +74,17 @@ request. Response status, timing, size, body, and headers appear below the edito
 - **Cmd/Ctrl+Enter** sends the active request; **Cmd/Ctrl+T** creates a draft.
 - **Environments** opens workspace loading and environment management. Its active
   environment is used when resolving variables for requests.
-- Saved HTTP requests from the loaded workspace appear in the left sidebar.
+- Saved HTTP requests from the loaded workspace appear in the left sidebar and
+  reopen with their headers, parameters, authentication, and raw/JSON body.
+- **Save** or **Cmd/Ctrl+S** saves a draft to a named request in a collection.
+  Existing requests keep their identity, file location, and metadata.
+- Changed tabs show a dirty marker; closing offers **Save**, **Discard**, or **Cancel**.
+- Credentials in auth controls and sensitive headers must use variable references
+  before saving. Plaintext credentials can be used for session-only sends.
 
-This is an initial desktop integration: drafts are session-only, response storage
-is limited to 2 MiB, and redirects are not followed. Saving edited drafts, history,
-splits, advanced body editors, and vault controls are not connected to this screen yet.
+Unsaved drafts are session-only; response storage is limited to 2 MiB, and
+redirects are not followed. History is session-only. Persistent history, tab restore,
+splits, advanced body editors, and vault controls still need desktop integration.
 
 If controls appear without text, see [desktop troubleshooting](docs/testing/desktop-workbench.md).
 
@@ -87,6 +99,9 @@ cargo xtask --help
 cargo xtask fmt
 cargo xtask lint
 cargo xtask test
+
+# Build installable desktop artifacts (macOS DMG / Windows installer)
+cargo xtask package --help
 ```
 
 ---
@@ -97,6 +112,7 @@ cargo xtask test
 - [Architecture Overview](docs/architecture/overview.md)
 - [Crate Boundaries & Dependency Rules](docs/architecture/crate_map.md)
 - [GPUI Pinning & Upgrade Strategy](docs/architecture/gpui_upgrade.md)
+- [Desktop Packaging and Release Builds](docs/release/packaging.md)
 - [Architecture Decision Records (ADRs)](docs/adr/)
 
 ---

@@ -7,9 +7,11 @@
 //! cargo xtask <subcommand>
 //! ```
 
+use anyhow::{bail, Context, Result};
 use std::env;
 use std::process::{Command, ExitStatus};
-use anyhow::{bail, Context, Result};
+
+mod packaging;
 
 fn main() -> Result<()> {
     let args: Vec<String> = env::args().skip(1).collect();
@@ -20,6 +22,7 @@ fn main() -> Result<()> {
         "lint" => run_lint()?,
         "check" => run_check()?,
         "test" => run_test()?,
+        "package" => packaging::run(&args[1..])?,
         "info" => show_info(),
         "help" | "--help" | "-h" => show_help(),
         other => {
@@ -39,7 +42,17 @@ fn run_fmt() -> Result<()> {
 
 fn run_lint() -> Result<()> {
     println!("Running clippy...");
-    run_cmd("cargo", &["clippy", "--workspace", "--all-targets", "--", "-D", "warnings"])
+    run_cmd(
+        "cargo",
+        &[
+            "clippy",
+            "--workspace",
+            "--all-targets",
+            "--",
+            "-D",
+            "warnings",
+        ],
+    )
 }
 
 fn run_check() -> Result<()> {
@@ -66,6 +79,7 @@ fn show_help() {
     println!("  fmt        Format code across the workspace");
     println!("  lint       Run Clippy linter with warnings denied");
     println!("  test       Run unit and integration test suites");
+    println!("  package    Build installable desktop artifacts (macOS DMG, Windows installer)");
     println!("  info       Display workspace metadata");
     println!("  help       Display this help message");
 }
@@ -77,7 +91,12 @@ fn run_cmd(cmd: &str, args: &[&str]) -> Result<()> {
         .with_context(|| format!("Failed to execute '{}'", cmd))?;
 
     if !status.success() {
-        bail!("Command '{} {}' failed with status {}", cmd, args.join(" "), status);
+        bail!(
+            "Command '{} {}' failed with status {}",
+            cmd,
+            args.join(" "),
+            status
+        );
     }
     Ok(())
 }

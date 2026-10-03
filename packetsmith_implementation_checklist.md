@@ -138,8 +138,8 @@ Legend:
 - [x] dependency vulnerability audit.
 - [x] dependency license audit.
 - [ ] secret scanning.
-- [ ] build release binaries.
-- [ ] artifact retention for CI builds.
+- [x] build release binaries.
+- [x] artifact retention for CI builds.
 
 ## 2.2 Local Commands
 
@@ -150,7 +150,7 @@ Legend:
 - [x] run all tests command.
 - [x] run formatting command.
 - [x] run lint command.
-- [ ] build installers command.
+- [x] build installers command.
 - [ ] generate SBOM command.
 
 ## 2.3 Documentation
@@ -510,10 +510,15 @@ Native integration update: `shell/workbench_view.rs` now opens at startup with
 session request tabs, editable method/URL, header rows, raw/JSON body input,
 Send/Cancel, workspace request navigation, environment resolution, and response
 body/headers/metadata. `ps-http::desktop` retains bounded responses for this view.
-Saving drafts, history, splits, advanced body editors, and vault controls still
-need native integration. Existing completion marks below do not establish that
-all underlying APIs are exposed in the desktop. Type checks including regression
-targets passed; visual and runtime verification remain pending.
+Saving new and existing drafts, full saved-request loading, content-based dirty
+markers, and Save/Discard/Cancel tab closing are now connected to the native view.
+Save uses Cmd/Ctrl+S, collection selection, background file I/O, credential-reference
+checks, and detection of external edits. HTTP payloads now persist headers, params,
+and bodies with backward-compatible defaults. Persistent history, tab restore,
+splits, advanced body editors, and vault controls still need native integration. Existing completion marks below do not establish that
+all underlying APIs are exposed in the desktop. Save/open regression tests,
+workspace tests, and native Linux interaction checks passed for the persistence
+slice; macOS and Windows runtime verification remains pending.
 See `docs/testing/desktop-workbench.md`.
 
 ## 11.1 Request Bar
@@ -2131,22 +2136,22 @@ remains pending.
 
 ## 55.1 macOS
 
-- [ ] Apple Silicon.
-- [ ] Intel decision.
-- [ ] DMG.
-- [ ] application icon.
-- [ ] code signing.
-- [ ] notarization.
+- [x] Apple Silicon.
+- [x] Intel decision. (universal DMG built from both Rust targets)
+- [x] DMG.
+- [x] application icon. (placeholder monogram; replaceable)
+- [ ] code signing. (wired, off by default; Developer ID secret required)
+- [ ] notarization. (wired, off by default; Apple secrets required)
 - [ ] update signature.
 
 ## 55.2 Windows
 
-- [ ] x64.
-- [ ] ARM64 decision.
-- [ ] installer.
-- [ ] Start menu.
-- [ ] uninstall.
-- [ ] code signing.
+- [x] x64.
+- [x] ARM64 decision. (deferred; package `--arch arm64` exists, CI ships x64)
+- [x] installer. (per-user NSIS setup executable)
+- [x] Start menu.
+- [x] uninstall.
+- [ ] code signing. (wired, off by default; certificate secret required)
 - [ ] protocol/file associations if adopted.
 
 ## 55.3 Linux

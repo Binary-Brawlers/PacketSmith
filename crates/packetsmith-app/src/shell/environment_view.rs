@@ -52,7 +52,7 @@ fn input(
 
 impl EnvironmentView {
     pub fn new(mut state: AppState, cx: &mut Context<Self>) -> Self {
-        let path = std::env::current_dir().unwrap_or_default();
+        let path = crate::paths::default_workspace_dir();
         let mut ws = WorkspaceState::new(path.clone(), "Workspace");
         let message = match ws.scan_resources() {
             Ok(()) => "Select an environment or create one.".into(),

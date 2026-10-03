@@ -3,13 +3,20 @@
 //! Orchestrates the application lifecycle, settings loading, local SQLite cache initialization,
 //! window persistence, notification routing, and native window bootstrapping via GPUI.
 
+// Release Windows builds use the GUI subsystem so no console window appears when
+// the installed application is launched from the Start menu.
+#![cfg_attr(
+    all(feature = "gpui-ui", target_os = "windows", not(debug_assertions)),
+    windows_subsystem = "windows"
+)]
+
+pub mod paths;
 pub mod shell;
 
-use std::path::PathBuf;
+use crate::shell::{AppState, WindowState};
 use anyhow::Result;
 use tracing::{info, Level};
-use tracing_subscriber::{FmtSubscriber, util::SubscriberInitExt};
-use crate::shell::{AppState, WindowState};
+use tracing_subscriber::{util::SubscriberInitExt, FmtSubscriber};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -20,10 +27,13 @@ async fn main() -> Result<()> {
     // Include GPUI's log-facade font/renderer diagnostics in terminal output.
     subscriber.try_init().ok();
 
-    info!("Starting PacketSmith desktop platform v{}", env!("CARGO_PKG_VERSION"));
+    info!(
+        "Starting PacketSmith desktop platform v{}",
+        env!("CARGO_PKG_VERSION")
+    );
 
-    // 2. Load persistent window bounds
-    let window_state_path = PathBuf::from(".packetsmith/window_state.json");
+    // 2. Load persistent window bounds from the platform data directory
+    let window_state_path = paths::window_state_path();
     let window_state = WindowState::load_from_file(&window_state_path);
 
     // 3. Initialize application state coordinator
@@ -67,19 +77,7 @@ async fn main() -> Result<()> {
 #[cfg(feature = "gpui-ui")]
 gpui::actions!(
     packetsmith_main,
-    [
-        Quit,
-        About,
-        Hide,
-        HideOthers,
-        ShowAll,
-        Undo,
-        Redo,
-        Cut,
-        Copy,
-        Paste,
-        SelectAll,
-    ]
+    [Quit, About, Hide, HideOthers, ShowAll, Undo, Redo, Cut, Copy, Paste, SelectAll,]
 );
 
 #[cfg(feature = "gpui-ui")]
@@ -135,10 +133,14 @@ fn launch_gpui(state: AppState) -> Result<()> {
                 disabled: false,
                 items: vec![
                     MenuItem::action("New Request Tab", crate::shell::workbench_view::NewRequest),
+                    MenuItem::action("Save Request", crate::shell::workbench_view::SaveRequest),
                     MenuItem::action("Close Tab", crate::shell::workbench_view::CloseTab),
                     MenuItem::separator(),
                     MenuItem::action("Send Request", crate::shell::workbench_view::SendRequest),
-                    MenuItem::action("Beautify JSON Body", crate::shell::workbench_view::BeautifyJson),
+                    MenuItem::action(
+                        "Beautify JSON Body",
+                        crate::shell::workbench_view::BeautifyJson,
+                    ),
                 ],
             },
             Menu {
@@ -158,11 +160,20 @@ fn launch_gpui(state: AppState) -> Result<()> {
                 name: "View".into(),
                 disabled: false,
                 items: vec![
-                    MenuItem::action("Collections", crate::shell::workbench_view::SelectCollections),
-                    MenuItem::action("Environments", crate::shell::workbench_view::SelectEnvironments),
+                    MenuItem::action(
+                        "Collections",
+                        crate::shell::workbench_view::SelectCollections,
+                    ),
+                    MenuItem::action(
+                        "Environments",
+                        crate::shell::workbench_view::SelectEnvironments,
+                    ),
                     MenuItem::action("History", crate::shell::workbench_view::SelectHistory),
                     MenuItem::separator(),
-                    MenuItem::action("Command Palette...", crate::shell::workbench_view::CommandPalette),
+                    MenuItem::action(
+                        "Command Palette...",
+                        crate::shell::workbench_view::CommandPalette,
+                    ),
                 ],
             },
             Menu {
@@ -170,7 +181,10 @@ fn launch_gpui(state: AppState) -> Result<()> {
                 disabled: false,
                 items: vec![
                     MenuItem::action("Documentation", crate::shell::workbench_view::OpenDocs),
-                    MenuItem::action("GitHub Repository", crate::shell::workbench_view::OpenGitHub),
+                    MenuItem::action(
+                        "GitHub Repository",
+                        crate::shell::workbench_view::OpenGitHub,
+                    ),
                 ],
             },
         ];

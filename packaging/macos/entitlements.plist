@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- The app makes outbound API requests. No other hardened-runtime
+	     exceptions are required: PacketSmith does not JIT or load unsigned code. -->
+	<key>com.apple.security.network.client</key>
+	<true/>
+</dict>
+</plist>

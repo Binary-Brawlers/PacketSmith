@@ -48,5 +48,9 @@ gpui-ui = [
     "dep:unicode-segmentation",
 ]
 
+[target.'cfg(windows)'.build-dependencies]
+# Embeds the application icon and version metadata into Windows executables.
+winresource = "0.1"
+
 [lints]
 workspace = true
