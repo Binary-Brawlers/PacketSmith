@@ -658,8 +658,29 @@ fn create_dmg(
         "UDZO".into(),
         dmg.clone().into_os_string(),
     ];
-    task.run("hdiutil", &arguments, None, &[])?;
-    Ok(dmg)
+
+    // `hdiutil create -srcfolder` intermittently fails with "Resource busy"
+    // on CI runners while Spotlight and XProtect index the staging folder.
+    // Flush pending writes and retry with backoff before giving up.
+    task.run("sync", &[], None, &[])?;
+    let attempts = 3;
+    let mut last_error = None;
+    for attempt in 1..=attempts {
+        match task.run("hdiutil", &arguments, None, &[]) {
+            Ok(()) => return Ok(dmg),
+            Err(error) => {
+                eprintln!("hdiutil create failed on attempt {attempt} of {attempts}: {error}");
+                last_error = Some(error);
+                if attempt < attempts && !task.dry_run {
+                    if dmg.exists() {
+                        fs::remove_file(&dmg).ok();
+                    }
+                    std::thread::sleep(std::time::Duration::from_secs(5 * attempt as u64));
+                }
+            }
+        }
+    }
+    Err(last_error.expect("at least one hdiutil attempt ran"))
 }
 
 fn stage_windows_folder(
