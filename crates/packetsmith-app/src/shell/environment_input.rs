@@ -648,9 +648,9 @@ impl Element for TextElement {
 impl Render for TextInput {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let (height, padding_y, text_size) = if self.compact {
-            (px(28.), px(2.), px(12.))
+            (px(32.), px(4.), px(12.))
         } else {
-            (px(34.), px(4.), px(13.))
+            (px(38.), px(6.), px(13.))
         };
         let font_family = if self.mono {
             super::typography::MONO_FONT
@@ -702,7 +702,13 @@ impl Render for TextInput {
             .rounded_md()
             .border_1()
             .border_color(rgb(border_color))
-            .hover(move |s| s.border_color(rgb(if border_color == theme::DANGER { theme::DANGER } else { 0x3a4a80 })))
+            .hover(move |s| {
+                s.border_color(rgb(if border_color == theme::DANGER {
+                    theme::DANGER
+                } else {
+                    theme::MUTED_DARK
+                }))
+            })
             .focus(|style| style.border_color(rgb(theme::BORDER_FOCUS)))
             .bg(rgb(theme::SURFACE))
             .h(height);

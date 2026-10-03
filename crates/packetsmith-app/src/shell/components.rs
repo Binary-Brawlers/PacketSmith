@@ -1,14 +1,12 @@
 //! Reusable UI component library for the PacketSmith desktop application.
 //!
 //! Provides standard badges, method pills, buttons, tabs, table cells,
-//! and card layouts adhering to the Aurora design language.
+//! and card layouts adhering to the shared desktop design language.
 
-use std::rc::Rc;
-use gpui::{
-    div, prelude::*, px, rgb, rgba, Context, KeyDownEvent, Role, SharedString, Window,
-};
 use super::theme;
 use super::typography;
+use gpui::{div, prelude::*, px, rgb, rgba, Context, KeyDownEvent, Role, SharedString, Window};
+use std::rc::Rc;
 
 // ---------------------------------------------------------------------------
 // 1. Badges & Micro-Pills
@@ -60,7 +58,10 @@ pub fn status_badge(status_code: u16, status_text: &str) -> impl IntoElement {
 }
 
 /// Renders a performance metric chip (e.g. "124 ms" or "3.2 KB") with a vector SVG icon.
-pub fn metric_chip_icon(kind: super::icons::IconKind, label: impl Into<SharedString>) -> impl IntoElement {
+pub fn metric_chip_icon(
+    kind: super::icons::IconKind,
+    label: impl Into<SharedString>,
+) -> impl IntoElement {
     div()
         .flex()
         .items_center()
@@ -172,12 +173,13 @@ pub fn styled_button<V: 'static>(
     let keyboard_action = action.clone();
 
     let (py, px, text_size, rounded) = match size {
-        ButtonSize::Small => (px(3.), px(10.), px(11.5), px(6.)),
-        ButtonSize::Medium => (px(6.), px(14.), px(13.), px(8.)),
-        ButtonSize::Large => (px(9.), px(18.), px(13.5), px(10.)),
+        ButtonSize::Small => (px(5.), px(10.), px(12.), px(5.)),
+        ButtonSize::Medium => (px(7.), px(14.), px(13.), px(6.)),
+        ButtonSize::Large => (px(9.), px(18.), px(13.), px(6.)),
     };
 
-    let (bg, text, border, hover_bg): (gpui::Background, u32, u32, gpui::Background) = match variant {
+    let (bg, text, border, hover_bg): (gpui::Background, u32, u32, gpui::Background) = match variant
+    {
         ButtonVariant::Primary => (
             theme::brand_gradient(),
             theme::INK,
@@ -211,7 +213,7 @@ pub fn styled_button<V: 'static>(
                 )
             } else {
                 (
-                    rgb(0x00000000).into(),
+                    rgba(0x00000000).into(),
                     theme::MUTED,
                     0x00000000,
                     rgb(theme::HOVER).into(),
@@ -234,7 +236,7 @@ pub fn styled_button<V: 'static>(
                 )
             } else {
                 (
-                    rgb(0x00000000).into(),
+                    rgba(0x00000000).into(),
                     theme::MUTED,
                     0x00000000,
                     rgb(theme::HOVER).into(),
@@ -262,15 +264,36 @@ pub fn styled_button<V: 'static>(
         .gap_1p5()
         .px(px)
         .py(py)
-        .rounded(rounded)
+        .rounded(if variant == ButtonVariant::Tab {
+            gpui::px(0.)
+        } else {
+            rounded
+        })
         .bg(bg)
         .border_1()
-        .border_color(rgb(border))
+        .border_color(if border == 0 { rgba(0) } else { rgb(border) })
         .text_color(rgb(text))
         .text_size(text_size)
         .font_weight(font_weight)
+        .when(variant == ButtonVariant::Tab, |el| {
+            el.bg(rgba(0))
+                .border_0()
+                .border_b_2()
+                .border_color(if selected {
+                    rgb(theme::ACCENT)
+                } else {
+                    rgba(0)
+                })
+        })
         .when(variant == ButtonVariant::Primary, |el| el.shadow_sm())
-        .hover(move |s| s.bg(hover_bg).text_color(rgb(if variant == ButtonVariant::Ghost && !selected { theme::TEXT } else { text })))
+        .hover(move |s| {
+            s.bg(hover_bg)
+                .text_color(rgb(if variant == ButtonVariant::Ghost && !selected {
+                    theme::TEXT
+                } else {
+                    text
+                }))
+        })
         .focus(|s| s.border_color(rgb(theme::BORDER_FOCUS)))
         .child(label)
         .on_click(cx.listener(move |view, _, window, cx| action(view, window, cx)))
@@ -301,12 +324,13 @@ pub fn styled_icon_button<V: 'static>(
     let keyboard_action = action.clone();
 
     let (py, px, icon_size, text_size, rounded) = match size {
-        ButtonSize::Small => (px(3.), px(8.), px(13.), px(11.5), px(6.)),
-        ButtonSize::Medium => (px(6.), px(12.), px(15.), px(13.), px(8.)),
-        ButtonSize::Large => (px(9.), px(16.), px(17.), px(13.5), px(10.)),
+        ButtonSize::Small => (px(5.), px(8.), px(14.), px(12.), px(5.)),
+        ButtonSize::Medium => (px(7.), px(12.), px(15.), px(13.), px(6.)),
+        ButtonSize::Large => (px(9.), px(16.), px(16.), px(13.), px(6.)),
     };
 
-    let (bg, text, border, hover_bg): (gpui::Background, u32, u32, gpui::Background) = match variant {
+    let (bg, text, border, hover_bg): (gpui::Background, u32, u32, gpui::Background) = match variant
+    {
         ButtonVariant::Primary => (
             theme::brand_gradient(),
             theme::INK,
@@ -340,7 +364,7 @@ pub fn styled_icon_button<V: 'static>(
                 )
             } else {
                 (
-                    rgb(0x00000000).into(),
+                    rgba(0x00000000).into(),
                     theme::MUTED,
                     0x00000000,
                     rgb(theme::HOVER).into(),
@@ -363,7 +387,7 @@ pub fn styled_icon_button<V: 'static>(
                 )
             } else {
                 (
-                    rgb(0x00000000).into(),
+                    rgba(0x00000000).into(),
                     theme::MUTED,
                     0x00000000,
                     rgb(theme::HOVER).into(),
@@ -380,6 +404,15 @@ pub fn styled_icon_button<V: 'static>(
 
     let mut btn = div()
         .id(id)
+        .aria_label(label_str.clone().unwrap_or_else(|| {
+            match icon_kind {
+                super::icons::IconKind::Plus => "New request",
+                super::icons::IconKind::Close => "Close",
+                super::icons::IconKind::Eye => "View environment variables",
+                _ => "Action",
+            }
+            .into()
+        }))
         .role(Role::Button)
         .focusable()
         .tab_index(0)
@@ -390,15 +423,36 @@ pub fn styled_icon_button<V: 'static>(
         .gap_1p5()
         .px(px)
         .py(py)
-        .rounded(rounded)
+        .rounded(if variant == ButtonVariant::Tab {
+            gpui::px(0.)
+        } else {
+            rounded
+        })
         .bg(bg)
         .border_1()
-        .border_color(rgb(border))
+        .border_color(if border == 0 { rgba(0) } else { rgb(border) })
         .text_color(rgb(text))
         .text_size(text_size)
         .font_weight(font_weight)
+        .when(variant == ButtonVariant::Tab, |el| {
+            el.bg(rgba(0))
+                .border_0()
+                .border_b_2()
+                .border_color(if selected {
+                    rgb(theme::ACCENT)
+                } else {
+                    rgba(0)
+                })
+        })
         .when(variant == ButtonVariant::Primary, |el| el.shadow_sm())
-        .hover(move |s| s.bg(hover_bg).text_color(rgb(if variant == ButtonVariant::Ghost && !selected { theme::TEXT } else { text })))
+        .hover(move |s| {
+            s.bg(hover_bg)
+                .text_color(rgb(if variant == ButtonVariant::Ghost && !selected {
+                    theme::TEXT
+                } else {
+                    text
+                }))
+        })
         .focus(|s| s.border_color(rgb(theme::BORDER_FOCUS)))
         .child(super::icons::icon(icon_kind, icon_size, rgb(text)));
 
@@ -471,12 +525,9 @@ pub fn empty_state_card_icon<V: 'static>(
         .items_center()
         .justify_center()
         .gap_3()
-        .p_8()
-        .rounded_xl()
-        .bg(rgb(theme::SURFACE))
-        .border_1()
-        .border_color(rgb(theme::BORDER))
-        .shadow_md()
+        .p_6()
+        .max_w(px(460.))
+        .text_center()
         .child(
             div()
                 .flex()
@@ -484,10 +535,9 @@ pub fn empty_state_card_icon<V: 'static>(
                 .justify_center()
                 .w(px(56.))
                 .h(px(56.))
-                .rounded_xl()
-                .bg(theme::brand_gradient())
-                .shadow_sm()
-                .child(super::icons::icon(icon_kind, px(26.), rgb(theme::INK))),
+                .rounded_lg()
+                .bg(rgb(theme::SURFACE_ELEVATED))
+                .child(super::icons::icon(icon_kind, px(26.), rgb(theme::MUTED))),
         )
         .child(
             div()
@@ -504,17 +554,15 @@ pub fn empty_state_card_icon<V: 'static>(
         );
 
     if let (Some(label), Some(id), Some(action)) = (action_label, action_id, action) {
-        card = card.child(
-            div().pt_2().child(styled_button(
-                id,
-                label,
-                ButtonVariant::Primary,
-                ButtonSize::Medium,
-                false,
-                cx,
-                action,
-            )),
-        );
+        card = card.child(div().pt_2().child(styled_button(
+            id,
+            label,
+            ButtonVariant::Primary,
+            ButtonSize::Medium,
+            false,
+            cx,
+            action,
+        )));
     }
 
     card
@@ -536,12 +584,9 @@ pub fn empty_state_card<V: 'static>(
         .items_center()
         .justify_center()
         .gap_3()
-        .p_8()
-        .rounded_xl()
-        .bg(rgb(theme::SURFACE))
-        .border_1()
-        .border_color(rgb(theme::BORDER))
-        .shadow_md()
+        .p_6()
+        .max_w(px(460.))
+        .text_center()
         .child(
             div()
                 .flex()
@@ -549,9 +594,8 @@ pub fn empty_state_card<V: 'static>(
                 .justify_center()
                 .w(px(52.))
                 .h(px(52.))
-                .rounded_xl()
-                .bg(theme::brand_gradient())
-                .shadow_sm()
+                .rounded_lg()
+                .bg(rgb(theme::SURFACE_ELEVATED))
                 .text_size(px(22.))
                 .text_color(rgb(theme::INK))
                 .child(icon.to_string()),
@@ -571,17 +615,15 @@ pub fn empty_state_card<V: 'static>(
         );
 
     if let (Some(label), Some(id), Some(action)) = (action_label, action_id, action) {
-        card = card.child(
-            div().pt_2().child(styled_button(
-                id,
-                label,
-                ButtonVariant::Primary,
-                ButtonSize::Medium,
-                false,
-                cx,
-                action,
-            )),
-        );
+        card = card.child(div().pt_2().child(styled_button(
+            id,
+            label,
+            ButtonVariant::Primary,
+            ButtonSize::Medium,
+            false,
+            cx,
+            action,
+        )));
     }
 
     card
@@ -600,4 +642,74 @@ pub fn shortcut_badge(shortcut: &str) -> impl IntoElement {
         .font_family(typography::MONO_FONT)
         .text_size(px(10.))
         .child(shortcut.to_string())
+}
+
+/// Navigation item with a visible label and keyboard activation.
+pub fn navigation_item<V: 'static>(
+    id: &'static str,
+    kind: super::icons::IconKind,
+    label: &'static str,
+    selected: bool,
+    cx: &mut Context<V>,
+    action: impl Fn(&mut V, &mut Window, &mut Context<V>) + 'static,
+) -> gpui::AnyElement {
+    let action = Rc::new(action);
+    let keyboard_action = action.clone();
+    div()
+        .id(id)
+        .role(Role::Button)
+        .aria_label(label)
+        .focusable()
+        .tab_index(0)
+        .cursor_pointer()
+        .w(gpui::px(78.))
+        .h(gpui::px(62.))
+        .flex()
+        .flex_col()
+        .items_center()
+        .justify_center()
+        .gap_2()
+        .rounded_md()
+        .bg(if selected {
+            rgb(theme::ACCENT_BG)
+        } else {
+            rgba(0)
+        })
+        .text_color(rgb(if selected {
+            theme::ACCENT_LIGHT
+        } else {
+            theme::MUTED
+        }))
+        .text_size(gpui::px(10.))
+        .border_1()
+        .border_color(rgba(0))
+        .hover(|s| s.bg(rgb(theme::HOVER)))
+        .focus(|s| s.border_color(rgb(theme::BORDER_FOCUS)))
+        .child(super::icons::icon(
+            kind,
+            gpui::px(19.),
+            rgb(if selected {
+                theme::ACCENT_LIGHT
+            } else {
+                theme::MUTED
+            }),
+        ))
+        .child(label)
+        .on_click(cx.listener(move |view, _, window, cx| action(view, window, cx)))
+        .on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
+            if matches!(event.keystroke.key.as_str(), "enter" | "space") {
+                keyboard_action(view, window, cx);
+                cx.stop_propagation();
+            }
+        }))
+        .into_any_element()
+}
+
+/// Display the shortcut for the current desktop platform.
+pub fn platform_shortcut(mac: &str, other: &str) -> impl IntoElement {
+    shortcut_badge(if cfg!(target_os = "macos") {
+        mac
+    } else {
+        other
+    })
 }

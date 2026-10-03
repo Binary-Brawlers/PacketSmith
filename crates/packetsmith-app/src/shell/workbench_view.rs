@@ -5,16 +5,18 @@
 use super::components::*;
 use super::environment_input::TextInput;
 use super::environment_view::EnvironmentView;
+use super::icons::{icon, IconKind};
 use super::theme;
 use super::typography;
 use super::AppState;
-use super::icons::{icon, IconKind};
 use gpui::{
-    anchored, deferred, div, point, prelude::*, px, rgb, rgba, Anchor, Animation, AnimationExt, App,
-    Context, Entity, FocusHandle, Focusable, Role, SharedString, Window,
+    anchored, deferred, div, point, prelude::*, px, rgb, rgba, Anchor, Animation, AnimationExt,
+    App, Context, Entity, FocusHandle, Focusable, Role, SharedString, Window,
+};
+use ps_http::{
+    HeaderEntry, HttpBody, HttpMethod, HttpRequest, HttpResponse, QueryParam, UrlSyncEngine,
 };
 use std::time::Duration;
-use ps_http::{HeaderEntry, HttpBody, HttpMethod, HttpRequest, HttpResponse, QueryParam, UrlSyncEngine};
 
 gpui::actions!(
     request_workbench,
@@ -142,7 +144,6 @@ pub struct WorkbenchView {
     method_selector_open: bool,
 }
 
-
 fn mono_input(
     value: &str,
     placeholder: &str,
@@ -158,8 +159,16 @@ fn mono_input(
     })
 }
 
-fn secret_input(value: &str, placeholder: &str, cx: &mut Context<WorkbenchView>) -> Entity<TextInput> {
-    cx.new(|cx| TextInput::new(value, placeholder, true, cx).mono().compact())
+fn secret_input(
+    value: &str,
+    placeholder: &str,
+    cx: &mut Context<WorkbenchView>,
+) -> Entity<TextInput> {
+    cx.new(|cx| {
+        TextInput::new(value, placeholder, true, cx)
+            .mono()
+            .compact()
+    })
 }
 
 impl std::fmt::Debug for WorkbenchView {
@@ -168,7 +177,7 @@ impl std::fmt::Debug for WorkbenchView {
             .field("draft_count", &self.drafts.len())
             .field("active", &self.active)
             .finish_non_exhaustive()
-        }
+    }
 }
 
 impl WorkbenchView {
@@ -185,11 +194,7 @@ impl WorkbenchView {
                     NewRequest,
                     Some("RequestWorkbench"),
                 ),
-                gpui::KeyBinding::new(
-                    &format!("{modifier}-w"),
-                    CloseTab,
-                    Some("RequestWorkbench"),
-                ),
+                gpui::KeyBinding::new(&format!("{modifier}-w"), CloseTab, Some("RequestWorkbench")),
                 gpui::KeyBinding::new(
                     &format!("{modifier}-k"),
                     CommandPalette,
@@ -223,8 +228,10 @@ impl WorkbenchView {
         let environments = cx.new(|cx| EnvironmentView::new(state, cx));
         cx.observe(&environments, |_, _, cx| cx.notify()).detach();
 
-        let sidebar_filter = cx.new(|cx| TextInput::new("", "Filter requests...", false, cx).compact());
-        let command_palette_query = cx.new(|cx| TextInput::new("", "Type a command or jump to request...", false, cx));
+        let sidebar_filter =
+            cx.new(|cx| TextInput::new("", "Filter requests...", false, cx).compact());
+        let command_palette_query =
+            cx.new(|cx| TextInput::new("", "Type a command or jump to request...", false, cx));
 
         let mut view = Self {
             focus: cx.focus_handle(),
@@ -242,7 +249,12 @@ impl WorkbenchView {
             method_selector_open: false,
         };
 
-        view.add_draft("Untitled Request".into(), "GET", "https://jsonplaceholder.typicode.com/posts/1", cx);
+        view.add_draft(
+            "Untitled Request".into(),
+            "GET",
+            "https://jsonplaceholder.typicode.com/posts/1",
+            cx,
+        );
         view
     }
 
@@ -274,16 +286,19 @@ impl WorkbenchView {
             basic_password: secret_input("", "Password", cx),
             api_key_name: mono_input("X-API-Key", "Key Name", true, cx),
             api_key_value: secret_input("", "Key Value", cx),
-            headers: vec![
-                HeaderRow {
-                    key: mono_input("Accept", "Header", true, cx),
-                    value: mono_input("application/json", "Value", true, cx),
-                    description: cx.new(|cx| TextInput::new("", "Description", false, cx).compact()),
-                    enabled: true,
-                },
-            ],
+            headers: vec![HeaderRow {
+                key: mono_input("Accept", "Header", true, cx),
+                value: mono_input("application/json", "Value", true, cx),
+                description: cx.new(|cx| TextInput::new("", "Description", false, cx).compact()),
+                enabled: true,
+            }],
             body_type: BodyType::None,
-            body: mono_input("{\n  \"example\": \"value\"\n}", "Paste JSON or payload here", false, cx),
+            body: mono_input(
+                "{\n  \"example\": \"value\"\n}",
+                "Paste JSON or payload here",
+                false,
+                cx,
+            ),
             response: None,
             response_text: String::new(),
             message: "Ready to send".into(),
@@ -367,7 +382,10 @@ impl WorkbenchView {
             return;
         }
 
-        let parsed_method = draft.method.parse::<HttpMethod>().unwrap_or(HttpMethod::Get);
+        let parsed_method = draft
+            .method
+            .parse::<HttpMethod>()
+            .unwrap_or(HttpMethod::Get);
         let url_val = draft.url.read(cx).value();
         let mut request = HttpRequest::new(parsed_method, url_val.trim());
 
@@ -434,7 +452,10 @@ impl WorkbenchView {
             BodyType::None => {}
             BodyType::Json => {
                 if !body_str.is_empty() {
-                    if !headers.iter().any(|h| h.name.eq_ignore_ascii_case("content-type")) {
+                    if !headers
+                        .iter()
+                        .any(|h| h.name.eq_ignore_ascii_case("content-type"))
+                    {
                         headers.push(HeaderEntry {
                             name: "Content-Type".into(),
                             value: "application/json".into(),
@@ -443,7 +464,9 @@ impl WorkbenchView {
                             description: None,
                         });
                     }
-                    request.body = HttpBody::Json { json_content: body_str };
+                    request.body = HttpBody::Json {
+                        json_content: body_str,
+                    };
                 }
             }
             BodyType::FormData | BodyType::Raw => {
@@ -589,40 +612,32 @@ impl Render for WorkbenchView {
         // 1. Left Activity Bar (48px rail)
         // -------------------------------------------------------------------
         let activity_bar = div()
-            .w(px(58.))
+            .w(px(88.))
             .flex_shrink_0()
             .flex()
             .flex_col()
             .items_center()
-            .py_3()
+            .py_4()
             .gap_2()
             .bg(rgb(theme::ACTIVITY_BAR))
             .border_r_1()
             .border_color(rgb(theme::BORDER_SUBTLE))
             .child(
-                // Gradient logo tile
                 div()
+                    .w(px(34.))
+                    .h(px(34.))
+                    .rounded_lg()
                     .flex()
                     .items_center()
                     .justify_center()
-                    .w(px(36.))
-                    .h(px(36.))
-                    .rounded_xl()
-                    .bg(theme::brand_gradient())
-                    .shadow_sm()
-                    .text_color(rgb(theme::INK))
-                    .font_weight(gpui::FontWeight::BOLD)
-                    .text_size(px(14.))
-                    .child("PS"),
+                    .bg(rgb(theme::ACCENT_BG))
+                    .child(icon(IconKind::Network, px(20.), rgb(theme::ACCENT_LIGHT))),
             )
-            .child(div().h(px(10.)))
-            // Mode: Collections
-            .child(styled_icon_button(
+            .child(div().h(px(12.)))
+            .child(navigation_item(
                 "nav-collections",
                 IconKind::Folder,
-                None::<&str>,
-                ButtonVariant::Ghost,
-                ButtonSize::Medium,
+                "Requests",
                 self.activity_mode == ActivityMode::Collections,
                 cx,
                 |s, _, cx| {
@@ -630,13 +645,10 @@ impl Render for WorkbenchView {
                     cx.notify();
                 },
             ))
-            // Mode: Environments
-            .child(styled_icon_button(
+            .child(navigation_item(
                 "nav-environments",
                 IconKind::Globe,
-                None::<&str>,
-                ButtonVariant::Ghost,
-                ButtonSize::Medium,
+                "Environments",
                 self.activity_mode == ActivityMode::Environments,
                 cx,
                 |s, _, cx| {
@@ -644,13 +656,10 @@ impl Render for WorkbenchView {
                     cx.notify();
                 },
             ))
-            // Mode: History
-            .child(styled_icon_button(
+            .child(navigation_item(
                 "nav-history",
                 IconKind::Clock,
-                None::<&str>,
-                ButtonVariant::Ghost,
-                ButtonSize::Medium,
+                "History",
                 self.activity_mode == ActivityMode::History,
                 cx,
                 |s, _, cx| {
@@ -659,13 +668,10 @@ impl Render for WorkbenchView {
                 },
             ))
             .child(div().flex_1())
-            // Command Palette Quick Trigger
-            .child(styled_icon_button(
+            .child(navigation_item(
                 "nav-cmd",
                 IconKind::Terminal,
-                None::<&str>,
-                ButtonVariant::Ghost,
-                ButtonSize::Medium,
+                "Commands",
                 false,
                 cx,
                 |s, _, cx| {
@@ -678,7 +684,7 @@ impl Render for WorkbenchView {
         // 2. Secondary Sidebar (260px)
         // -------------------------------------------------------------------
         let mut sidebar = div()
-            .w(px(276.))
+            .w(px(232.))
             .flex_shrink_0()
             .flex()
             .flex_col()
@@ -689,24 +695,20 @@ impl Render for WorkbenchView {
         match self.activity_mode {
             ActivityMode::Collections => {
                 sidebar = sidebar
-                    .child(
-                        section_header(
-                            "COLLECTIONS",
-                            Some(filtered_saved.len()),
-                            Some(styled_button(
-                                "sidebar-new-request",
-                                "+ New",
-                                ButtonVariant::Primary,
-                                ButtonSize::Small,
-                                false,
-                                cx,
-                                |s, _, cx| s.add_draft("Untitled Request".into(), "GET", "", cx),
-                            )),
-                        ),
-                    )
-                    .child(
-                        div().px_3().py_2().child(self.sidebar_filter.clone()),
-                    );
+                    .child(section_header(
+                        "Collections",
+                        Some(filtered_saved.len()),
+                        Some(styled_button(
+                            "sidebar-new-request",
+                            "+ New",
+                            ButtonVariant::Ghost,
+                            ButtonSize::Small,
+                            false,
+                            cx,
+                            |s, _, cx| s.add_draft("Untitled Request".into(), "GET", "", cx),
+                        )),
+                    ))
+                    .child(div().px_3().py_2().child(self.sidebar_filter.clone()));
 
                 let mut list = div()
                     .id("saved-requests")
@@ -730,19 +732,56 @@ impl Render for WorkbenchView {
                             .gap_2()
                             .text_center()
                             .child(icon(IconKind::Folder, px(24.), rgb(theme::MUTED)))
-                            .child(div().text_size(px(13.)).font_weight(gpui::FontWeight::MEDIUM).child("No saved requests"))
-                            .child(div().text_size(px(11.)).text_color(rgb(theme::MUTED)).child("Open a workspace or click + New."))
+                            .child(
+                                div()
+                                    .text_size(px(13.))
+                                    .font_weight(gpui::FontWeight::MEDIUM)
+                                    .child("No saved requests"),
+                            )
+                            .child(
+                                div()
+                                    .text_size(px(11.))
+                                    .text_color(rgb(theme::MUTED))
+                                    .child("Keep your API requests together in a local workspace."),
+                            )
                             .child(styled_button(
-                                "sample-apis",
-                                "Load Sample APIs",
+                                "collections-open-workspace",
+                                "Open workspace",
                                 ButtonVariant::Secondary,
                                 ButtonSize::Small,
                                 false,
                                 cx,
                                 |s, _, cx| {
-                                    s.add_draft("List Users (JSONPlaceholder)".into(), "GET", "https://jsonplaceholder.typicode.com/users", cx);
-                                    s.add_draft("Create Post (JSONPlaceholder)".into(), "POST", "https://jsonplaceholder.typicode.com/posts", cx);
-                                    s.add_draft("Random Cat Fact".into(), "GET", "https://catfact.ninja/fact", cx);
+                                    s.activity_mode = ActivityMode::Environments;
+                                    cx.notify();
+                                },
+                            ))
+                            .child(styled_button(
+                                "sample-apis",
+                                "Try sample requests",
+                                ButtonVariant::Secondary,
+                                ButtonSize::Small,
+                                false,
+                                cx,
+                                |s, _, cx| {
+                                    s.add_draft(
+                                        "List Users (JSONPlaceholder)".into(),
+                                        "GET",
+                                        "https://jsonplaceholder.typicode.com/users",
+                                        cx,
+                                    );
+                                    s.add_draft(
+                                        "Create Post (JSONPlaceholder)".into(),
+                                        "POST",
+                                        "https://jsonplaceholder.typicode.com/posts",
+                                        cx,
+                                    );
+                                    s.add_draft(
+                                        "Random Cat Fact".into(),
+                                        "GET",
+                                        "https://catfact.ninja/fact",
+                                        cx,
+                                    );
                                 },
                             )),
                     );
@@ -820,7 +859,7 @@ impl Render for WorkbenchView {
                     );
             }
             ActivityMode::History => {
-                sidebar = sidebar.child(section_header("HISTORY", Some(self.history.len()), None));
+                sidebar = sidebar.child(section_header("History", Some(self.history.len()), None));
                 let mut hist_list = div()
                     .id("hist-scroll")
                     .flex_1()
@@ -855,47 +894,51 @@ impl Render for WorkbenchView {
                         div()
                             .id(SharedString::from(format!("hist-{idx}")))
                             .role(Role::Button)
+                            .aria_label(h_url.clone())
                             .cursor_pointer()
                             .flex()
-                            .items_center()
+                            .flex_col()
                             .gap_2()
-                            .px_2()
-                            .py_1p5()
+                            .px_3()
+                            .py_3()
                             .rounded_md()
+                            .border_b_1()
+                            .border_color(rgb(theme::BORDER_SUBTLE))
                             .hover(|s| s.bg(rgb(theme::HOVER)))
-                            .child(method_badge(&h_method))
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .min_w_0()
-                                    .text_size(px(11.5))
-                                    .text_color(rgb(theme::TEXT_SECONDARY))
-                                    .child(h_url.clone()),
-                            )
                             .child(
                                 div()
                                     .flex()
                                     .items_center()
-                                    .gap_1p5()
-                                    .when_some(item.duration_ms, |this, ms| {
-                                        this.child(
+                                    .gap_2()
+                                    .child(method_badge(&h_method))
+                                    .child(div().flex_1())
+                                    .when_some(item.duration_ms, |el, ms| {
+                                        el.child(
                                             div()
-                                                .text_size(px(10.))
+                                                .text_size(px(11.))
                                                 .text_color(rgb(theme::MUTED))
-                                                .child(format!("{ms}ms")),
+                                                .child(format!("{ms} ms")),
                                         )
                                     })
                                     .child(
                                         div()
-                                            .text_size(px(10.5))
-                                            .font_weight(gpui::FontWeight::BOLD)
-                                            .text_color(rgb(if item.status_code.map(|c| c < 400).unwrap_or(false) {
-                                                theme::SUCCESS
-                                            } else {
-                                                theme::DANGER
-                                            }))
+                                            .text_size(px(11.))
+                                            .text_color(rgb(item
+                                                .status_code
+                                                .map(theme::status_color)
+                                                .unwrap_or(theme::DANGER)))
                                             .child(status_str),
                                     ),
+                            )
+                            .child(
+                                div()
+                                    .w_full()
+                                    .min_w_0()
+                                    .truncate()
+                                    .font_family(typography::MONO_FONT)
+                                    .text_size(px(11.))
+                                    .text_color(rgb(theme::TEXT_SECONDARY))
+                                    .child(h_url.clone()),
                             )
                             .on_click(cx.listener(move |s, _, _, cx| {
                                 s.add_draft("Restored Request".into(), &h_method, &h_url, cx);
@@ -911,11 +954,15 @@ impl Render for WorkbenchView {
         // 3. Top Navigation Header Bar
         // -------------------------------------------------------------------
         let top_header = div()
-            .h(px(54.))
+            .h(px(52.))
             .flex_shrink_0()
             .flex()
             .items_center()
-            .pl(if cfg!(target_os = "macos") { px(82.) } else { px(16.) })
+            .pl(if cfg!(target_os = "macos") {
+                px(82.)
+            } else {
+                px(16.)
+            })
             .pr_4()
             .gap_3()
             .bg(rgb(theme::HEADER))
@@ -928,17 +975,28 @@ impl Render for WorkbenchView {
                     .items_center()
                     .gap_1p5()
                     .text_size(px(12.5))
-                    .child(div().text_color(rgb(theme::MUTED)).child("Workspace  /"))
                     .child(
                         div()
                             .font_weight(gpui::FontWeight::SEMIBOLD)
                             .text_color(rgb(theme::TEXT))
-                            .child(
-                                self.drafts
-                                    .get(self.active)
-                                    .map(|d| d.title.clone())
-                                    .unwrap_or_else(|| "Untitled Request".into()),
-                            ),
+                            .child("PacketSmith"),
+                    )
+                    .child(div().px_2().text_color(rgb(theme::MUTED_DARK)).child("/"))
+                    .child(div().text_color(rgb(theme::MUTED)).child("Workspace"))
+                    .child(icon(
+                        IconKind::ChevronRight,
+                        px(12.),
+                        rgb(theme::MUTED_DARK),
+                    ))
+                    .child(
+                        div()
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                            .text_color(rgb(theme::TEXT))
+                            .child(match self.activity_mode {
+                                ActivityMode::Collections => "Requests",
+                                ActivityMode::Environments => "Environments",
+                                ActivityMode::History => "History",
+                            }),
                     ),
             )
             .child(div().flex_1())
@@ -951,11 +1009,11 @@ impl Render for WorkbenchView {
                     .flex()
                     .items_center()
                     .gap_2()
-                    .w(px(320.))
+                    .w(px(240.))
                     .px_3()
                     .py_1p5()
-                    .rounded_xl()
-                    .bg(rgb(theme::SURFACE))
+                    .rounded_lg()
+                    .bg(rgb(theme::CANVAS))
                     .border_1()
                     .border_color(rgb(theme::BORDER))
                     .shadow_xs()
@@ -968,7 +1026,7 @@ impl Render for WorkbenchView {
                             .text_color(rgb(theme::MUTED))
                             .child("Search or jump to..."),
                     )
-                    .child(shortcut_badge("⌘K"))
+                    .child(platform_shortcut("⌘K", "Ctrl K"))
                     .on_click(cx.listener(|s, _, _, cx| {
                         s.show_command_palette = !s.show_command_palette;
                         cx.notify();
@@ -1009,27 +1067,6 @@ impl Render for WorkbenchView {
                     )),
             );
 
-        // If in full environment studio mode:
-        if self.activity_mode == ActivityMode::Environments {
-            return div()
-                .size_full()
-                .flex()
-                .flex_col()
-                .bg(rgb(theme::CANVAS))
-                .text_color(rgb(theme::TEXT))
-                .font_family(typography::UI_FONT)
-                .track_focus(&self.focus)
-                .child(top_header)
-                .child(
-                    div()
-                        .flex()
-                        .flex_1()
-                        .min_h_0()
-                        .child(activity_bar)
-                        .child(self.environments.clone()),
-                );
-        }
-
         // -------------------------------------------------------------------
         // 4. Request Tabs Strip
         // -------------------------------------------------------------------
@@ -1039,10 +1076,12 @@ impl Render for WorkbenchView {
             .flex_shrink_0()
             .flex()
             .items_center()
-            .gap_1p5()
-            .px_4()
-            .pt_1p5()
-            .bg(rgb(theme::CANVAS))
+            .gap_0()
+            .px_3()
+            .pt_1()
+            .border_b_1()
+            .border_color(rgb(theme::BORDER_SUBTLE))
+            .bg(rgb(theme::SIDEBAR))
             .overflow_x_scroll();
 
         for (idx, draft) in self.drafts.iter().enumerate() {
@@ -1061,19 +1100,17 @@ impl Render for WorkbenchView {
                     .gap_2()
                     .px_3p5()
                     .h(px(36.))
-                    .rounded_t_xl()
-                    .bg(rgb(if active {
-                        theme::SURFACE_ELEVATED
-                    } else {
-                        0x00000000
-                    }))
+                    .rounded_t_md()
+                    .bg(if active { rgb(theme::CANVAS) } else { rgba(0) })
                     .border_t_2()
-                    .border_color(rgb(if active {
-                        theme::ACCENT
-                    } else {
-                        0x00000000
-                    }))
-                    .hover(|s| s.bg(rgb(if active { theme::SURFACE_ELEVATED } else { theme::HOVER })))
+                    .border_color(if active { rgb(theme::ACCENT) } else { rgba(0) })
+                    .hover(|s| {
+                        s.bg(rgb(if active {
+                            theme::SURFACE_ELEVATED
+                        } else {
+                            theme::HOVER
+                        }))
+                    })
                     .child(method_badge(&method))
                     .child(
                         div()
@@ -1083,15 +1120,16 @@ impl Render for WorkbenchView {
                             } else {
                                 gpui::FontWeight::NORMAL
                             })
-                            .text_color(rgb(if active {
-                                theme::TEXT
-                            } else {
-                                theme::MUTED
-                            }))
+                            .text_color(rgb(if active { theme::TEXT } else { theme::MUTED }))
                             .child(title),
                     )
                     .when(draft.is_dirty, |el| {
-                        el.child(div().text_size(px(8.)).text_color(rgb(theme::ACCENT)).child("●"))
+                        el.child(
+                            div()
+                                .text_size(px(8.))
+                                .text_color(rgb(theme::ACCENT))
+                                .child("●"),
+                        )
                     })
                     // Close tab button (✕)
                     .child(
@@ -1119,20 +1157,16 @@ impl Render for WorkbenchView {
             );
         }
 
-        tab_strip = tab_strip.child(
-            div()
-                .pl_1()
-                .child(styled_icon_button(
-                    "add-tab-btn",
-                    IconKind::Plus,
-                    None::<&str>,
-                    ButtonVariant::Ghost,
-                    ButtonSize::Small,
-                    false,
-                    cx,
-                    |s, _, cx| s.add_draft("Untitled Request".into(), "GET", "", cx),
-                )),
-        );
+        tab_strip = tab_strip.child(div().pl_1().child(styled_icon_button(
+            "add-tab-btn",
+            IconKind::Plus,
+            None::<&str>,
+            ButtonVariant::Ghost,
+            ButtonSize::Small,
+            false,
+            cx,
+            |s, _, cx| s.add_draft("Untitled Request".into(), "GET", "", cx),
+        )));
 
         // -------------------------------------------------------------------
         // 5. Unified URL Composer Bar
@@ -1141,9 +1175,9 @@ impl Render for WorkbenchView {
         let current_method = draft.method.clone();
 
         let composer_bar = div()
-            .px_6()
-            .pt_3()
-            .pb_2()
+            .px_5()
+            .pt_5()
+            .pb_3()
             .flex()
             .flex_col()
             .gap_2p5()
@@ -1152,12 +1186,11 @@ impl Render for WorkbenchView {
                     .flex()
                     .items_center()
                     .gap_2p5()
-                    .p_2p5()
-                    .rounded_xl()
-                    .bg(rgb(theme::SURFACE_ELEVATED))
+                    .p_1p5()
+                    .rounded_lg()
+                    .bg(rgb(theme::SURFACE))
                     .border_1()
                     .border_color(rgb(theme::BORDER))
-                    .shadow_sm()
                     // Method selector dropdown container
                     .child(
                         div()
@@ -1175,13 +1208,19 @@ impl Render for WorkbenchView {
                                     .rounded_lg()
                                     .bg(rgb(theme::method_bg_color(&current_method)))
                                     .border_1()
-                                    .border_color(rgba((theme::method_color(&current_method) << 8) | 0x66))
+                                    .border_color(rgba(
+                                        (theme::method_color(&current_method) << 8) | 0x66,
+                                    ))
                                     .text_color(rgb(theme::method_color(&current_method)))
                                     .font_family(typography::MONO_FONT)
                                     .text_size(px(12.5))
                                     .font_weight(gpui::FontWeight::BOLD)
                                     .child(current_method.clone())
-                                    .child(icon(IconKind::ChevronDown, px(11.), rgb(theme::method_color(&current_method))))
+                                    .child(icon(
+                                        IconKind::ChevronDown,
+                                        px(11.),
+                                        rgb(theme::method_color(&current_method)),
+                                    ))
                                     .on_click(cx.listener(|s, _, _, cx| {
                                         s.method_selector_open = !s.method_selector_open;
                                         cx.notify();
@@ -1209,10 +1248,12 @@ impl Render for WorkbenchView {
                                                 div()
                                                     .id("method-dropdown-menu")
                                                     .occlude()
-                                                    .on_mouse_down_out(cx.listener(|s, _, _, cx| {
-                                                        s.method_selector_open = false;
-                                                        cx.notify();
-                                                    }))
+                                                    .on_mouse_down_out(cx.listener(
+                                                        |s, _, _, cx| {
+                                                            s.method_selector_open = false;
+                                                            cx.notify();
+                                                        },
+                                                    ))
                                                     .w(px(290.))
                                                     .rounded_lg()
                                                     .bg(rgb(theme::SURFACE_ELEVATED))
@@ -1223,40 +1264,59 @@ impl Render for WorkbenchView {
                                                     .flex()
                                                     .flex_col()
                                                     .gap_0p5()
-                                                    .children(methods.into_iter().map(|(m, desc)| {
-                                                        let is_selected = m == current;
-                                                        let m_str = m.to_string();
-                                                        div()
-                                                            .id(SharedString::from(format!("dropdown-method-{m}")))
-                                                            .role(Role::Button)
-                                                            .cursor_pointer()
-                                                            .flex()
-                                                            .items_center()
-                                                            .gap_2p5()
-                                                            .px_2p5()
-                                                            .py_1p5()
-                                                            .rounded_md()
-                                                            .bg(rgb(if is_selected { theme::HOVER } else { 0x00000000 }))
-                                                            .hover(|s| s.bg(rgb(theme::HOVER)))
-                                                            .child(method_badge(m))
-                                                            .child(
-                                                                div()
-                                                                    .flex_1()
-                                                                    .min_w_0()
-                                                                    .text_size(px(11.))
-                                                                    .text_color(rgb(theme::TEXT_SECONDARY))
-                                                                    .child(desc),
-                                                            )
-                                                            .when(is_selected, |row| {
-                                                                row.child(icon(IconKind::Check, px(13.), rgb(theme::ACCENT)))
-                                                            })
-                                                            .on_click(cx.listener(move |s, _, _, cx| {
-                                                                s.drafts[s.active].method = m_str.clone();
-                                                                s.drafts[s.active].is_dirty = true;
-                                                                s.method_selector_open = false;
-                                                                cx.notify();
-                                                            }))
-                                                    })),
+                                                    .children(methods.into_iter().map(
+                                                        |(m, desc)| {
+                                                            let is_selected = m == current;
+                                                            let m_str = m.to_string();
+                                                            div()
+                                                                .id(SharedString::from(format!(
+                                                                    "dropdown-method-{m}"
+                                                                )))
+                                                                .role(Role::Button)
+                                                                .cursor_pointer()
+                                                                .flex()
+                                                                .items_center()
+                                                                .gap_2p5()
+                                                                .px_2p5()
+                                                                .py_1p5()
+                                                                .rounded_md()
+                                                                .bg(rgb(if is_selected {
+                                                                    theme::HOVER
+                                                                } else {
+                                                                    0x00000000
+                                                                }))
+                                                                .hover(|s| s.bg(rgb(theme::HOVER)))
+                                                                .child(method_badge(m))
+                                                                .child(
+                                                                    div()
+                                                                        .flex_1()
+                                                                        .min_w_0()
+                                                                        .text_size(px(11.))
+                                                                        .text_color(rgb(
+                                                                            theme::TEXT_SECONDARY,
+                                                                        ))
+                                                                        .child(desc),
+                                                                )
+                                                                .when(is_selected, |row| {
+                                                                    row.child(icon(
+                                                                        IconKind::Check,
+                                                                        px(13.),
+                                                                        rgb(theme::ACCENT),
+                                                                    ))
+                                                                })
+                                                                .on_click(cx.listener(
+                                                                    move |s, _, _, cx| {
+                                                                        s.drafts[s.active].method =
+                                                                            m_str.clone();
+                                                                        s.drafts[s.active]
+                                                                            .is_dirty = true;
+                                                                        s.method_selector_open =
+                                                                            false;
+                                                                        cx.notify();
+                                                                    },
+                                                                ))
+                                                        },
+                                                    )),
                                             ),
                                     )
                                     .priority(100),
@@ -1264,12 +1324,7 @@ impl Render for WorkbenchView {
                             }),
                     )
                     // URL Input field
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .child(draft.url.clone()),
-                    )
+                    .child(div().flex_1().min_w_0().child(draft.url.clone()))
                     // Primary Action: Send Button
                     .child(if draft.running.is_some() {
                         styled_icon_button(
@@ -1349,7 +1404,7 @@ impl Render for WorkbenchView {
             .border_color(rgb(theme::BORDER_SUBTLE))
             .child(styled_button(
                 "subtab-params",
-                format!("Params ({})", draft.params.len()),
+                format!("Params · {}", draft.params.len()),
                 ButtonVariant::Tab,
                 ButtonSize::Medium,
                 sub_tab == RequestSubTab::Params,
@@ -1378,7 +1433,7 @@ impl Render for WorkbenchView {
             ))
             .child(styled_button(
                 "subtab-headers",
-                format!("Headers ({})", draft.headers.len()),
+                format!("Headers · {}", draft.headers.len()),
                 ButtonVariant::Tab,
                 ButtonSize::Medium,
                 sub_tab == RequestSubTab::Headers,
@@ -1418,14 +1473,14 @@ impl Render for WorkbenchView {
                 },
             ))
             .child(div().flex_1())
-            .child(shortcut_badge("⌘↵ to send"));
+            .child(platform_shortcut("⌘↵ Send", "Ctrl Enter"));
 
         // -------------------------------------------------------------------
         // 7. Request Config Tab Content Area
         // -------------------------------------------------------------------
         let mut config_content = div()
             .id("config-content")
-            .h(px(180.))
+            .h(px(210.))
             .flex_shrink_0()
             .overflow_y_scroll()
             .px_6()
@@ -1437,13 +1492,18 @@ impl Render for WorkbenchView {
                 params_col = params_col.child(
                     div()
                         .flex()
+                        .gap_2()
+                        .px_2()
+                        .py_2()
+                        .bg(rgb(theme::SURFACE))
+                        .rounded_sm()
                         .text_size(px(11.))
                         .font_weight(gpui::FontWeight::SEMIBOLD)
                         .text_color(rgb(theme::MUTED))
                         .child(div().w(px(30.)).child(""))
-                        .child(div().w(px(180.)).child("KEY"))
-                        .child(div().flex_1().child("VALUE"))
-                        .child(div().flex_1().child("DESCRIPTION"))
+                        .child(div().w(px(180.)).child("Key"))
+                        .child(div().flex_1().child("Value"))
+                        .child(div().flex_1().child("Description"))
                         .child(div().w(px(30.)).child("")),
                 );
 
@@ -1454,128 +1514,139 @@ impl Render for WorkbenchView {
                             .flex()
                             .items_center()
                             .gap_2()
-                            .child(
-                                div()
-                                    .w(px(30.))
-                                    .child(styled_button(
-                                        format!("toggle-param-{idx}"),
-                                        if enabled { "☑" } else { "☐" },
-                                        ButtonVariant::Ghost,
-                                        ButtonSize::Small,
-                                        enabled,
-                                        cx,
-                                        move |s, _, cx| {
-                                            if s.active < s.drafts.len() && idx < s.drafts[s.active].params.len() {
-                                                s.drafts[s.active].params[idx].enabled = !enabled;
-                                                s.sync_params_to_url(cx);
-                                            }
-                                        },
-                                    )),
-                            )
+                            .child(div().w(px(30.)).child(styled_button(
+                                format!("toggle-param-{idx}"),
+                                if enabled { "☑" } else { "☐" },
+                                ButtonVariant::Ghost,
+                                ButtonSize::Small,
+                                enabled,
+                                cx,
+                                move |s, _, cx| {
+                                    if s.active < s.drafts.len()
+                                        && idx < s.drafts[s.active].params.len()
+                                    {
+                                        s.drafts[s.active].params[idx].enabled = !enabled;
+                                        s.sync_params_to_url(cx);
+                                    }
+                                },
+                            )))
                             .child(div().w(px(180.)).child(row.key.clone()))
                             .child(div().flex_1().child(row.value.clone()))
                             .child(div().flex_1().child(row.description.clone()))
-                            .child(
-                                div()
-                                    .w(px(30.))
-                                    .child(styled_button(
-                                        format!("remove-param-{idx}"),
-                                        "✕",
-                                        ButtonVariant::Ghost,
-                                        ButtonSize::Small,
-                                        false,
-                                        cx,
-                                        move |s, _, cx| {
-                                            if s.active < s.drafts.len() && idx < s.drafts[s.active].params.len() {
-                                                s.drafts[s.active].params.remove(idx);
-                                                s.sync_params_to_url(cx);
-                                            }
-                                        },
-                                    )),
-                            ),
+                            .child(div().w(px(30.)).child(styled_button(
+                                format!("remove-param-{idx}"),
+                                "✕",
+                                ButtonVariant::Ghost,
+                                ButtonSize::Small,
+                                false,
+                                cx,
+                                move |s, _, cx| {
+                                    if s.active < s.drafts.len()
+                                        && idx < s.drafts[s.active].params.len()
+                                    {
+                                        s.drafts[s.active].params.remove(idx);
+                                        s.sync_params_to_url(cx);
+                                    }
+                                },
+                            ))),
                     );
                 }
 
-                params_col = params_col.child(
-                    div().pt_1().child(styled_button(
-                        "add-param-btn",
-                        "+ Add Query Parameter",
-                        ButtonVariant::Secondary,
-                        ButtonSize::Small,
-                        false,
-                        cx,
-                        |s, _, cx| {
-                            s.drafts[s.active].params.push(ParamRow {
-                                key: mono_input("", "Key", true, cx),
-                                value: mono_input("", "Value", true, cx),
-                                description: cx.new(|cx| TextInput::new("", "Description", false, cx).compact()),
-                                enabled: true,
-                            });
-                            cx.notify();
-                        },
-                    )),
-                );
+                if draft.params.is_empty() {
+                    params_col = params_col.child(
+                        div()
+                            .py_3()
+                            .px_2()
+                            .text_size(px(12.))
+                            .text_color(rgb(theme::MUTED))
+                            .child(
+                                "No query parameters. Add a key and value to refine this request.",
+                            ),
+                    );
+                }
+                params_col = params_col.child(div().pt_1().flex().child(styled_button(
+                    "add-param-btn",
+                    "+ Add Query Parameter",
+                    ButtonVariant::Secondary,
+                    ButtonSize::Small,
+                    false,
+                    cx,
+                    |s, _, cx| {
+                        s.drafts[s.active].params.push(ParamRow {
+                            key: mono_input("", "Key", true, cx),
+                            value: mono_input("", "Value", true, cx),
+                            description: cx
+                                .new(|cx| TextInput::new("", "Description", false, cx).compact()),
+                            enabled: true,
+                        });
+                        cx.notify();
+                    },
+                )));
 
                 config_content = config_content.child(params_col);
             }
             RequestSubTab::Auth => {
                 let auth_type = draft.auth_type;
-                let mut auth_col = div().flex().flex_col().gap_3()
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .child(div().text_size(px(12.)).text_color(rgb(theme::MUTED)).child("Type:"))
-                            .child(styled_button(
-                                "auth-none",
-                                "No Auth",
-                                ButtonVariant::Secondary,
-                                ButtonSize::Small,
-                                auth_type == AuthType::None,
-                                cx,
-                                |s, _, cx| {
-                                    s.drafts[s.active].auth_type = AuthType::None;
-                                    cx.notify();
-                                },
-                            ))
-                            .child(styled_button(
-                                "auth-bearer",
-                                "Bearer Token",
-                                ButtonVariant::Secondary,
-                                ButtonSize::Small,
-                                auth_type == AuthType::Bearer,
-                                cx,
-                                |s, _, cx| {
-                                    s.drafts[s.active].auth_type = AuthType::Bearer;
-                                    cx.notify();
-                                },
-                            ))
-                            .child(styled_button(
-                                "auth-basic",
-                                "Basic Auth",
-                                ButtonVariant::Secondary,
-                                ButtonSize::Small,
-                                auth_type == AuthType::Basic,
-                                cx,
-                                |s, _, cx| {
-                                    s.drafts[s.active].auth_type = AuthType::Basic;
-                                    cx.notify();
-                                },
-                            ))
-                            .child(styled_button(
-                                "auth-apikey",
-                                "API Key",
-                                ButtonVariant::Secondary,
-                                ButtonSize::Small,
-                                auth_type == AuthType::ApiKey,
-                                cx,
-                                |s, _, cx| {
-                                    s.drafts[s.active].auth_type = AuthType::ApiKey;
-                                    cx.notify();
-                                },
-                            )),
-                    );
+                let mut auth_col = div().flex().flex_col().gap_3().child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .child(
+                            div()
+                                .text_size(px(12.))
+                                .text_color(rgb(theme::MUTED))
+                                .child("Type:"),
+                        )
+                        .child(styled_button(
+                            "auth-none",
+                            "No Auth",
+                            ButtonVariant::Secondary,
+                            ButtonSize::Small,
+                            auth_type == AuthType::None,
+                            cx,
+                            |s, _, cx| {
+                                s.drafts[s.active].auth_type = AuthType::None;
+                                cx.notify();
+                            },
+                        ))
+                        .child(styled_button(
+                            "auth-bearer",
+                            "Bearer Token",
+                            ButtonVariant::Secondary,
+                            ButtonSize::Small,
+                            auth_type == AuthType::Bearer,
+                            cx,
+                            |s, _, cx| {
+                                s.drafts[s.active].auth_type = AuthType::Bearer;
+                                cx.notify();
+                            },
+                        ))
+                        .child(styled_button(
+                            "auth-basic",
+                            "Basic Auth",
+                            ButtonVariant::Secondary,
+                            ButtonSize::Small,
+                            auth_type == AuthType::Basic,
+                            cx,
+                            |s, _, cx| {
+                                s.drafts[s.active].auth_type = AuthType::Basic;
+                                cx.notify();
+                            },
+                        ))
+                        .child(styled_button(
+                            "auth-apikey",
+                            "API Key",
+                            ButtonVariant::Secondary,
+                            ButtonSize::Small,
+                            auth_type == AuthType::ApiKey,
+                            cx,
+                            |s, _, cx| {
+                                s.drafts[s.active].auth_type = AuthType::ApiKey;
+                                cx.notify();
+                            },
+                        )),
+                );
 
                 match auth_type {
                     AuthType::None => {
@@ -1592,7 +1663,12 @@ impl Render for WorkbenchView {
                                 .flex()
                                 .flex_col()
                                 .gap_1p5()
-                                .child(div().text_size(px(11.)).text_color(rgb(theme::MUTED)).child("TOKEN"))
+                                .child(
+                                    div()
+                                        .text_size(px(11.))
+                                        .text_color(rgb(theme::MUTED))
+                                        .child("TOKEN"),
+                                )
                                 .child(draft.bearer_token.clone()),
                         );
                     }
@@ -1607,7 +1683,12 @@ impl Render for WorkbenchView {
                                         .flex()
                                         .flex_col()
                                         .gap_1p5()
-                                        .child(div().text_size(px(11.)).text_color(rgb(theme::MUTED)).child("USERNAME"))
+                                        .child(
+                                            div()
+                                                .text_size(px(11.))
+                                                .text_color(rgb(theme::MUTED))
+                                                .child("USERNAME"),
+                                        )
                                         .child(draft.basic_username.clone()),
                                 )
                                 .child(
@@ -1616,7 +1697,12 @@ impl Render for WorkbenchView {
                                         .flex()
                                         .flex_col()
                                         .gap_1p5()
-                                        .child(div().text_size(px(11.)).text_color(rgb(theme::MUTED)).child("PASSWORD"))
+                                        .child(
+                                            div()
+                                                .text_size(px(11.))
+                                                .text_color(rgb(theme::MUTED))
+                                                .child("PASSWORD"),
+                                        )
                                         .child(draft.basic_password.clone()),
                                 ),
                         );
@@ -1632,7 +1718,12 @@ impl Render for WorkbenchView {
                                         .flex()
                                         .flex_col()
                                         .gap_1p5()
-                                        .child(div().text_size(px(11.)).text_color(rgb(theme::MUTED)).child("HEADER KEY"))
+                                        .child(
+                                            div()
+                                                .text_size(px(11.))
+                                                .text_color(rgb(theme::MUTED))
+                                                .child("HEADER KEY"),
+                                        )
                                         .child(draft.api_key_name.clone()),
                                 )
                                 .child(
@@ -1641,7 +1732,12 @@ impl Render for WorkbenchView {
                                         .flex()
                                         .flex_col()
                                         .gap_1p5()
-                                        .child(div().text_size(px(11.)).text_color(rgb(theme::MUTED)).child("VALUE"))
+                                        .child(
+                                            div()
+                                                .text_size(px(11.))
+                                                .text_color(rgb(theme::MUTED))
+                                                .child("Value"),
+                                        )
                                         .child(draft.api_key_value.clone()),
                                 ),
                         );
@@ -1660,8 +1756,8 @@ impl Render for WorkbenchView {
                         .text_color(rgb(theme::MUTED))
                         .child(div().w(px(30.)).child(""))
                         .child(div().w(px(220.)).child("HEADER"))
-                        .child(div().flex_1().child("VALUE"))
-                        .child(div().flex_1().child("DESCRIPTION"))
+                        .child(div().flex_1().child("Value"))
+                        .child(div().flex_1().child("Description"))
                         .child(div().w(px(30.)).child("")),
                 );
 
@@ -1672,45 +1768,41 @@ impl Render for WorkbenchView {
                             .flex()
                             .items_center()
                             .gap_2()
-                            .child(
-                                div()
-                                    .w(px(30.))
-                                    .child(styled_button(
-                                        format!("toggle-header-{idx}"),
-                                        if enabled { "☑" } else { "☐" },
-                                        ButtonVariant::Ghost,
-                                        ButtonSize::Small,
-                                        enabled,
-                                        cx,
-                                        move |s, _, cx| {
-                                            if s.active < s.drafts.len() && idx < s.drafts[s.active].headers.len() {
-                                                s.drafts[s.active].headers[idx].enabled = !enabled;
-                                                cx.notify();
-                                            }
-                                        },
-                                    )),
-                            )
+                            .child(div().w(px(30.)).child(styled_button(
+                                format!("toggle-header-{idx}"),
+                                if enabled { "☑" } else { "☐" },
+                                ButtonVariant::Ghost,
+                                ButtonSize::Small,
+                                enabled,
+                                cx,
+                                move |s, _, cx| {
+                                    if s.active < s.drafts.len()
+                                        && idx < s.drafts[s.active].headers.len()
+                                    {
+                                        s.drafts[s.active].headers[idx].enabled = !enabled;
+                                        cx.notify();
+                                    }
+                                },
+                            )))
                             .child(div().w(px(220.)).child(row.key.clone()))
                             .child(div().flex_1().child(row.value.clone()))
                             .child(div().flex_1().child(row.description.clone()))
-                            .child(
-                                div()
-                                    .w(px(30.))
-                                    .child(styled_button(
-                                        format!("remove-header-{idx}"),
-                                        "✕",
-                                        ButtonVariant::Ghost,
-                                        ButtonSize::Small,
-                                        false,
-                                        cx,
-                                        move |s, _, cx| {
-                                            if s.active < s.drafts.len() && idx < s.drafts[s.active].headers.len() {
-                                                s.drafts[s.active].headers.remove(idx);
-                                                cx.notify();
-                                            }
-                                        },
-                                    )),
-                            ),
+                            .child(div().w(px(30.)).child(styled_button(
+                                format!("remove-header-{idx}"),
+                                "✕",
+                                ButtonVariant::Ghost,
+                                ButtonSize::Small,
+                                false,
+                                cx,
+                                move |s, _, cx| {
+                                    if s.active < s.drafts.len()
+                                        && idx < s.drafts[s.active].headers.len()
+                                    {
+                                        s.drafts[s.active].headers.remove(idx);
+                                        cx.notify();
+                                    }
+                                },
+                            ))),
                     );
                 }
 
@@ -1730,7 +1822,9 @@ impl Render for WorkbenchView {
                                 s.drafts[s.active].headers.push(HeaderRow {
                                     key: mono_input("", "Header", true, cx),
                                     value: mono_input("", "Value", true, cx),
-                                    description: cx.new(|cx| TextInput::new("", "Description", false, cx).compact()),
+                                    description: cx.new(|cx| {
+                                        TextInput::new("", "Description", false, cx).compact()
+                                    }),
                                     enabled: true,
                                 });
                                 cx.notify();
@@ -1747,7 +1841,8 @@ impl Render for WorkbenchView {
                                 s.drafts[s.active].headers.push(HeaderRow {
                                     key: mono_input("Content-Type", "Header", true, cx),
                                     value: mono_input("application/json", "Value", true, cx),
-                                    description: cx.new(|cx| TextInput::new("", "", false, cx).compact()),
+                                    description: cx
+                                        .new(|cx| TextInput::new("", "", false, cx).compact()),
                                     enabled: true,
                                 });
                                 cx.notify();
@@ -1841,33 +1936,19 @@ impl Render for WorkbenchView {
                     .gap_3()
                     .child(
                         div()
-                            .flex()
-                            .items_center()
-                            .gap_3()
-                            .child(styled_button(
-                                "toggle-ssl",
-                                "SSL Verification: Enabled",
-                                ButtonVariant::Secondary,
-                                ButtonSize::Small,
-                                true,
-                                cx,
-                                |_, _, _| {},
-                            ))
-                            .child(styled_button(
-                                "toggle-redirects",
-                                "Follow Redirects: Enabled",
-                                ButtonVariant::Secondary,
-                                ButtonSize::Small,
-                                true,
-                                cx,
-                                |_, _, _| {},
-                            )),
+                            .text_size(px(13.))
+                            .font_weight(gpui::FontWeight::MEDIUM)
+                            .child("Request defaults"),
                     )
                     .child(
                         div()
-                            .text_size(px(11.5))
-                            .text_color(rgb(theme::MUTED))
-                            .child("Request timeout is set to 30,000 ms by default."),
+                            .text_color(rgb(theme::TEXT_SECONDARY))
+                            .child("TLS certificate verification is enabled."),
+                    )
+                    .child(
+                        div()
+                            .text_color(rgb(theme::TEXT_SECONDARY))
+                            .child("Redirects are disabled. Request timeout: 30 seconds."),
                     );
 
                 config_content = config_content.child(settings_col);
@@ -1894,6 +1975,8 @@ impl Render for WorkbenchView {
             .flex()
             .items_center()
             .gap_2p5()
+            .flex_wrap()
+            .flex_shrink_0()
             .bg(rgb(theme::HEADER))
             .border_b_1()
             .border_color(rgb(theme::BORDER_SUBTLE))
@@ -1902,13 +1985,7 @@ impl Render for WorkbenchView {
                     .flex()
                     .items_center()
                     .gap_2()
-                    .child(
-                        div()
-                            .w(px(8.))
-                            .h(px(8.))
-                            .rounded_full()
-                            .bg(theme::brand_gradient()),
-                    )
+                    .child(icon(IconKind::Code, px(15.), rgb(theme::MUTED)))
                     .child(
                         div()
                             .font_weight(gpui::FontWeight::SEMIBOLD)
@@ -1949,8 +2026,14 @@ impl Render for WorkbenchView {
             response_header = response_header
                 .child(div().flex_1())
                 .child(status_badge(resp.status_code, &resp.status_text))
-                .child(metric_chip_icon(IconKind::Zap, format!("{} ms", resp.duration_ms)))
-                .child(metric_chip_icon(IconKind::HardDrive, format!("{} B", resp.size_bytes)))
+                .child(metric_chip_icon(
+                    IconKind::Zap,
+                    format!("{} ms", resp.duration_ms),
+                ))
+                .child(metric_chip_icon(
+                    IconKind::HardDrive,
+                    format!("{} B", resp.size_bytes),
+                ))
                 .child(styled_icon_button(
                     "copy-response-btn",
                     IconKind::Copy,
@@ -1982,11 +2065,41 @@ impl Render for WorkbenchView {
                             .font_family(typography::MONO_FONT)
                             .text_size(px(12.))
                             .text_color(rgb(theme::TEXT))
-                            .child(if draft.response_text.is_empty() {
-                                "Empty response body".into()
-                            } else {
-                                draft.response_text.clone()
-                            }),
+                            .flex()
+                            .flex_col()
+                            .gap_1()
+                            .when(draft.response_text.is_empty(), |el| {
+                                el.child("Empty response body")
+                            })
+                            .children(draft.response_text.lines().enumerate().map(
+                                |(index, line)| {
+                                    div()
+                                        .flex()
+                                        .gap_4()
+                                        .min_w_0()
+                                        .child(
+                                            div()
+                                                .w(px(28.))
+                                                .flex_shrink_0()
+                                                .text_right()
+                                                .text_color(rgb(theme::MUTED_DARK))
+                                                .child((index + 1).to_string()),
+                                        )
+                                        .child(
+                                            div()
+                                                .flex_1()
+                                                .min_w_0()
+                                                .text_color(rgb(
+                                                    if line.trim_start().starts_with('"') {
+                                                        theme::ACCENT_LIGHT
+                                                    } else {
+                                                        theme::TEXT_SECONDARY
+                                                    },
+                                                ))
+                                                .child(line.to_owned()),
+                                        )
+                                },
+                            )),
                     );
                 }
                 ResponseSubTab::Headers => {
@@ -2017,7 +2130,13 @@ impl Render for WorkbenchView {
                                 .border_color(rgb(theme::BORDER_SUBTLE))
                                 .font_family(typography::MONO_FONT)
                                 .text_size(px(11.5))
-                                .child(div().w(px(220.)).font_weight(gpui::FontWeight::BOLD).text_color(rgb(theme::MUTED)).child(k))
+                                .child(
+                                    div()
+                                        .w(px(220.))
+                                        .font_weight(gpui::FontWeight::BOLD)
+                                        .text_color(rgb(theme::MUTED))
+                                        .child(k),
+                                )
                                 .child(div().flex_1().text_color(rgb(theme::TEXT)).child(v)),
                         );
                     }
@@ -2035,11 +2154,11 @@ impl Render for WorkbenchView {
                     .p_8()
                     .child(empty_state_card_icon(
                         IconKind::Play,
-                        "Ready to Send",
+                        "Your response will appear here",
                         if draft.running.is_some() {
                             "Executing request... waiting for network response."
                         } else {
-                            "Enter a URL above and press Send (⌘+Enter) to view the response."
+                            "Send a request to inspect its status, headers, and response body."
                         },
                         None::<&str>,
                         None::<&str>,
@@ -2052,6 +2171,19 @@ impl Render for WorkbenchView {
         // -------------------------------------------------------------------
         // 9. Bottom Status Bar (28px)
         // -------------------------------------------------------------------
+        let request_notice = div()
+            .px_6()
+            .py_2()
+            .bg(rgb(theme::WARNING_BG))
+            .text_size(px(12.))
+            .text_color(rgb(theme::WARNING))
+            .child(draft.message.clone());
+        let show_request_notice = draft.running.is_none()
+            && draft.message != "Ready to send"
+            && draft.response.as_ref().is_none_or(|response| {
+                !draft.message.starts_with(&response.status_code.to_string())
+            });
+
         let status_bar = div()
             .h(px(32.))
             .flex_shrink_0()
@@ -2070,19 +2202,9 @@ impl Render for WorkbenchView {
                     .w(px(7.))
                     .h(px(7.))
                     .rounded_full()
-                    .bg(rgb(theme::SUCCESS))
-                    .with_animation(
-                        "status-beacon-pulse",
-                        Animation::new(Duration::from_millis(1800))
-                            .repeat()
-                            .with_easing(gpui::ease_in_out),
-                        |this, delta| {
-                            let alpha = 0.45 + 0.55 * (delta * std::f32::consts::PI).sin();
-                            this.opacity(alpha)
-                        },
-                    ),
+                    .bg(rgb(theme::SUCCESS)),
             )
-            .child("Local Engine")
+            .child("Local workspace")
             .child(div().text_color(rgb(theme::BORDER_SUBTLE)).child("|"))
             .child(format!("Environment: {environment_name}"))
             .child(div().text_color(rgb(theme::BORDER_SUBTLE)).child("|"))
@@ -2097,8 +2219,8 @@ impl Render for WorkbenchView {
             .child(div().flex_1())
             .child(format!("{} open tabs", self.drafts.len()))
             .child(div().text_color(rgb(theme::BORDER_SUBTLE)).child("|"))
-            .child(shortcut_badge("⌘K Commands"))
-            .child(shortcut_badge("⌘↵ Send"));
+            .child(platform_shortcut("⌘K Commands", "Ctrl K Commands"))
+            .child(platform_shortcut("⌘↵ Send", "Ctrl Enter Send"));
 
         // -------------------------------------------------------------------
         // 10. Assemble Root Layout
@@ -2145,30 +2267,43 @@ impl Render for WorkbenchView {
                 cx.notify();
             }))
             .on_action(cx.listener(|s, _: &OpenGitHub, _, cx| {
-                s.drafts[s.active].message = "GitHub: github.com/Binary-Brawlers/PacketSmith".into();
+                s.drafts[s.active].message =
+                    "GitHub: github.com/Binary-Brawlers/PacketSmith".into();
                 cx.notify();
             }))
             .child(top_header)
-            .child(
-                div()
-                    .flex()
-                    .flex_1()
-                    .min_h_0()
-                    .child(activity_bar)
-                    .child(sidebar)
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .flex_1()
-                            .min_w_0()
-                            .child(tab_strip)
-                            .child(composer_bar)
-                            .child(request_tabs)
-                            .child(config_content)
-                            .child(response_panel),
-                    ),
-            )
+            .child(div().flex().flex_1().min_h_0().child(activity_bar).child(
+                if self.activity_mode == ActivityMode::Environments {
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .min_h_0()
+                        .child(self.environments.clone())
+                        .into_any_element()
+                } else {
+                    div()
+                        .flex()
+                        .flex_1()
+                        .min_w_0()
+                        .min_h_0()
+                        .child(sidebar)
+                        .child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .flex_1()
+                                .min_w_0()
+                                .min_h_0()
+                                .child(tab_strip)
+                                .child(composer_bar)
+                                .child(request_tabs)
+                                .child(config_content)
+                                .when(show_request_notice, |el| el.child(request_notice))
+                                .child(response_panel),
+                        )
+                        .into_any_element()
+                },
+            ))
             .child(status_bar);
 
         // Command Palette Modal Overlay
@@ -2203,7 +2338,12 @@ impl Render for WorkbenchView {
                                     .flex()
                                     .items_center()
                                     .justify_between()
-                                    .child(div().font_weight(gpui::FontWeight::BOLD).text_size(px(13.)).child("Command Palette"))
+                                    .child(
+                                        div()
+                                            .font_weight(gpui::FontWeight::BOLD)
+                                            .text_size(px(13.))
+                                            .child("Command Palette"),
+                                    )
                                     .child(styled_icon_button(
                                         "close-palette-btn",
                                         IconKind::Close,
@@ -2226,7 +2366,11 @@ impl Render for WorkbenchView {
                                     .gap_1()
                                     .child(styled_button(
                                         "cmd-send",
-                                        "Send Request (⌘+Enter)",
+                                        if cfg!(target_os = "macos") {
+                                            "Send request (⌘Enter)"
+                                        } else {
+                                            "Send request (Ctrl Enter)"
+                                        },
                                         ButtonVariant::Secondary,
                                         ButtonSize::Small,
                                         false,
@@ -2238,7 +2382,11 @@ impl Render for WorkbenchView {
                                     ))
                                     .child(styled_button(
                                         "cmd-new",
-                                        "New Request Tab (⌘+T)",
+                                        if cfg!(target_os = "macos") {
+                                            "New request (⌘T)"
+                                        } else {
+                                            "New request (Ctrl T)"
+                                        },
                                         ButtonVariant::Secondary,
                                         ButtonSize::Small,
                                         false,
@@ -2323,23 +2471,23 @@ impl Render for WorkbenchView {
                         div()
                             .text_size(px(11.5))
                             .text_color(rgb(theme::MUTED))
-                            .child("Variables available in {{var_name}} expressions for this request."),
+                            .child(
+                                "Variables available in {{var_name}} expressions for this request.",
+                            ),
                     )
-                    .child(
-                        styled_button(
-                            "manage-env-btn",
-                            "Manage in Environment Studio  →",
-                            ButtonVariant::Primary,
-                            ButtonSize::Small,
-                            false,
-                            cx,
-                            |s, _, cx| {
-                                s.show_env_quick_look = false;
-                                s.activity_mode = ActivityMode::Environments;
-                                cx.notify();
-                            },
-                        ),
-                    ),
+                    .child(styled_button(
+                        "manage-env-btn",
+                        "Manage in Environment Studio  →",
+                        ButtonVariant::Primary,
+                        ButtonSize::Small,
+                        false,
+                        cx,
+                        |s, _, cx| {
+                            s.show_env_quick_look = false;
+                            s.activity_mode = ActivityMode::Environments;
+                            cx.notify();
+                        },
+                    )),
             );
         }
 
@@ -2377,8 +2525,16 @@ fn simple_base64(input: &[u8]) -> String {
     let mut i = 0;
     while i < input.len() {
         let b0 = input[i] as usize;
-        let b1 = if i + 1 < input.len() { input[i + 1] as usize } else { 0 };
-        let b2 = if i + 2 < input.len() { input[i + 2] as usize } else { 0 };
+        let b1 = if i + 1 < input.len() {
+            input[i + 1] as usize
+        } else {
+            0
+        };
+        let b2 = if i + 2 < input.len() {
+            input[i + 2] as usize
+        } else {
+            0
+        };
 
         let triple = (b0 << 16) | (b1 << 8) | b2;
 

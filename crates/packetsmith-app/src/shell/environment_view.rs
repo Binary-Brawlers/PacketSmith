@@ -323,9 +323,9 @@ impl EnvironmentView {
             .bg(rgb(if primary {
                 theme::ACCENT
             } else if selected {
-                theme::HOVER
+                theme::ACCENT_BG
             } else {
-                theme::SURFACE_ELEVATED
+                theme::SURFACE
             }))
             .text_size(px(12.))
             .text_color(rgb(if primary {
@@ -347,7 +347,13 @@ impl EnvironmentView {
             .tab_index(0)
             .focus(|s| s.border_color(rgb(theme::BORDER_FOCUS)))
             .cursor_pointer()
-            .hover(move |s| s.bg(rgb(if primary { theme::ACCENT_HOVER } else { theme::HOVER })))
+            .hover(move |s| {
+                s.bg(rgb(if primary {
+                    theme::ACCENT_HOVER
+                } else {
+                    theme::HOVER
+                }))
+            })
             .child(label)
             .on_click(cx.listener(move |this, _, window, cx| action(this, window, cx)))
             .on_key_down(cx.listener(move |this, event: &KeyDownEvent, window, cx| {
@@ -370,7 +376,7 @@ impl Render for EnvironmentView {
             .collect();
         let active = self.ws().active_environment_id;
         let mut sidebar = div()
-            .w(px(248.))
+            .w(px(232.))
             .bg(rgb(theme::SIDEBAR))
             .flex_none()
             .flex()
@@ -382,9 +388,10 @@ impl Render for EnvironmentView {
             .child(
                 div()
                     .pb_3()
-                    .text_size(px(11.))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_size(px(13.))
                     .text_color(rgb(theme::MUTED))
-                    .child("ENVIRONMENTS"),
+                    .child("Environments"),
             )
             .child(self.button(
                 "none",
@@ -405,12 +412,24 @@ impl Render for EnvironmentView {
                 move |s, _, cx| s.switch(Some(id), cx),
             ));
         }
+        sidebar = sidebar.child(div().flex_1()).child(
+            div()
+                .pt_4()
+                .border_t_1()
+                .border_color(rgb(theme::BORDER_SUBTLE))
+                .text_size(px(11.))
+                .text_color(rgb(theme::MUTED))
+                .child(format!("{} environments · stored locally", docs.len())),
+        );
         let mut body = div().id("environment-body").flex_1().min_w_0().overflow_y_scroll().p_6().flex().flex_col().gap_4()
-            .child(div().text_size(px(24.)).font_weight(FontWeight::SEMIBOLD).child("Environment variables"))
-            .child(div().text_color(rgb(theme::MUTED)).child("Shared defaults travel with your workspace. Secret current values stay in this session."))
-            .child(self.name.clone())
+            .child(div().text_size(px(11.)).text_color(rgb(theme::ACCENT_LIGHT)).child("WORKSPACE SETTINGS"))
+            .child(div().text_size(px(26.)).font_weight(FontWeight::SEMIBOLD).child("Environment variables"))
+            .child(div().text_size(px(13.)).text_color(rgb(theme::MUTED)).child("Reuse values across requests with {{variables}}. Local overrides stay in this session."))
+            .child(div().mt_2().flex().flex_col().gap_2()
+                .child(div().text_size(px(12.)).text_color(rgb(theme::TEXT_SECONDARY)).child("Environment name"))
+                .child(div().max_w(px(420.)).child(self.name.clone())))
             .child(div().flex().flex_wrap().gap_2()
-                .child(self.button("create", "Create", cx, |s, _, cx| {
+                .child(self.button("create", "Create environment", cx, |s, _, cx| {
                     if !s.can_leave(cx) { return; }
                     let name = s.name.read(cx).value(); let result = s.ws_mut().create_environment(&name);
                     s.report(result, "Environment created.", cx); s.sync_name(cx);
@@ -448,9 +467,23 @@ impl Render for EnvironmentView {
         if let Some(id) = active {
             let rows = self.ws().environments.rows(id).unwrap_or_default();
             body = body
-                .child(self.button("add-variable", "Add variable", cx, |s, _, cx| {
-                    s.edit(None, cx)
-                }))
+                .child(
+                    div()
+                        .mt_2()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .child(
+                            div()
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .child(format!("Variables · {}", rows.len())),
+                        )
+                        .child(
+                            self.button("add-variable", "+ Add variable", cx, |s, _, cx| {
+                                s.edit(None, cx)
+                            }),
+                        ),
+                )
                 .child(
                     div()
                         .flex()
@@ -462,12 +495,12 @@ impl Render for EnvironmentView {
                         .text_size(px(11.))
                         .font_weight(FontWeight::BOLD)
                         .text_color(rgb(theme::MUTED))
-                        .child(div().w(px(180.)).child("VARIABLE KEY"))
-                        .child(div().w(px(110.)).child("TYPE"))
-                        .child(div().flex_1().child("INITIAL / DEFAULT"))
-                        .child(div().flex_1().child("CURRENT (LOCAL)"))
-                        .child(div().flex_1().child("DESCRIPTION"))
-                        .child(div().w(px(60.)).child("ACTION")),
+                        .child(div().w(px(150.)).child("Variable"))
+                        .child(div().w(px(88.)).child("Type"))
+                        .child(div().flex_1().child("Shared default"))
+                        .child(div().flex_1().child("Local value"))
+                        .child(div().flex_1().child("Description"))
+                        .child(div().w(px(60.)).child("")),
                 );
             if rows.is_empty() {
                 body = body.child(
@@ -475,7 +508,9 @@ impl Render for EnvironmentView {
                         .p_6()
                         .text_center()
                         .text_color(rgb(theme::MUTED))
-                        .child("No variables configured yet. Click 'Add variable' above to declare one."),
+                        .child(
+                        "No variables configured yet. Click 'Add variable' above to declare one.",
+                    ),
                 );
             }
             for row in rows {
@@ -512,7 +547,7 @@ impl Render for EnvironmentView {
                         .hover(|s| s.bg(rgb(theme::HOVER)))
                         .child(
                             div()
-                                .w(px(180.))
+                                .w(px(150.))
                                 .min_w_0()
                                 .font_family(super::typography::MONO_FONT)
                                 .font_weight(FontWeight::BOLD)
@@ -521,20 +556,26 @@ impl Render for EnvironmentView {
                                 .child(key.clone()),
                         )
                         .child(
-                            div()
-                                .w(px(110.))
-                                .child(
-                                    div()
-                                        .px_1p5()
-                                        .py(px(0.5))
-                                        .rounded_sm()
-                                        .bg(rgb(if is_sec { theme::WARNING_BG } else { theme::SURFACE_ELEVATED }))
-                                        .text_color(rgb(if is_sec { theme::WARNING } else { theme::TEXT_SECONDARY }))
-                                        .font_family(super::typography::MONO_FONT)
-                                        .text_size(px(10.))
-                                        .font_weight(FontWeight::BOLD)
-                                        .child(format!("{:?}{}", kind, if is_sec { "🔒" } else { "" })),
-                                ),
+                            div().w(px(88.)).child(
+                                div()
+                                    .px_1p5()
+                                    .py(px(0.5))
+                                    .rounded_sm()
+                                    .bg(rgb(if is_sec {
+                                        theme::WARNING_BG
+                                    } else {
+                                        theme::SURFACE_ELEVATED
+                                    }))
+                                    .text_color(rgb(if is_sec {
+                                        theme::WARNING
+                                    } else {
+                                        theme::TEXT_SECONDARY
+                                    }))
+                                    .font_family(super::typography::MONO_FONT)
+                                    .text_size(px(10.))
+                                    .font_weight(FontWeight::BOLD)
+                                    .child(format!("{:?}{}", kind, if is_sec { "🔒" } else { "" })),
+                            ),
                         )
                         .child(
                             div()
@@ -562,24 +603,32 @@ impl Render for EnvironmentView {
                                 .text_color(rgb(theme::MUTED))
                                 .child(row.description.unwrap_or_default()),
                         )
-                        .child(
-                            div()
-                                .w(px(60.))
-                                .child(
-                                    self.button(format!("edit-{key}"), "Edit ✎", cx, move |s, _, cx| {
-                                        let entry = s
-                                            .ws()
-                                            .environments
-                                            .get(id)
-                                            .ok()
-                                            .and_then(|d| d.variables.iter().find(|v| v.key == key))
-                                            .cloned();
-                                        s.edit(entry, cx);
-                                    }),
-                                ),
-                        ),
+                        .child(div().w(px(60.)).child(self.button(
+                            format!("edit-{key}"),
+                            "Edit",
+                            cx,
+                            move |s, _, cx| {
+                                let entry = s
+                                    .ws()
+                                    .environments
+                                    .get(id)
+                                    .ok()
+                                    .and_then(|d| d.variables.iter().find(|v| v.key == key))
+                                    .cloned();
+                                s.edit(entry, cx);
+                            },
+                        ))),
                 );
             }
+        }
+        if active.is_none() {
+            body = body.child(div().my_4().p_6().rounded_lg()
+                .border_1().border_color(rgb(theme::BORDER_SUBTLE))
+                .flex().flex_col().items_center().gap_3().text_center()
+                .child(super::icons::icon(super::icons::IconKind::Globe, px(28.), rgb(theme::MUTED)))
+                .child(div().font_weight(FontWeight::MEDIUM).child("A place for your API variables"))
+                .child(div().max_w(px(410.)).text_size(px(12.)).text_color(rgb(theme::MUTED))
+                    .child("Create an environment for development, staging, or production, then add URLs, tokens, and other shared values.")));
         }
         if let Some(editor) = &self.editor {
             let key = editor.key.clone();
@@ -611,7 +660,7 @@ impl Render for EnvironmentView {
                         .text_color(rgb(theme::MUTED))
                         .child("Shared defaults travel with your workspace repository. Secret current values remain in your local session."),
                 )
-                .child(div().text_size(px(11.)).font_weight(FontWeight::BOLD).text_color(rgb(theme::MUTED)).child("VARIABLE KEY"))
+                .child(div().text_size(px(11.)).font_weight(FontWeight::BOLD).text_color(rgb(theme::MUTED)).child("Variable"))
                 .child(key)
                 .child(
                     div()
@@ -622,7 +671,7 @@ impl Render for EnvironmentView {
                         .child(self.button("clear-default", "Clear default", cx, |s, _, cx| { if let Some(e) = &mut s.editor { e.preserve_default = false; e.default.update(cx, |v, _| v.reset()); } cx.notify(); })),
                 )
                 .child(default)
-                .child(div().text_size(px(11.)).font_weight(FontWeight::BOLD).text_color(rgb(theme::MUTED)).child("DESCRIPTION"))
+                .child(div().text_size(px(11.)).font_weight(FontWeight::BOLD).text_color(rgb(theme::MUTED)).child("Description"))
                 .child(description)
                 .child(
                     div()
@@ -677,9 +726,9 @@ impl Render for EnvironmentView {
                 .child(self.button(
                     "toggle-transfer",
                     if self.show_transfer {
-                        "↓  Import & export"
+                        "−  Import & export"
                     } else {
-                        "→  Import & export"
+                        "+  Import & export"
                     },
                     cx,
                     |s, _, cx| {
@@ -716,9 +765,9 @@ impl Render for EnvironmentView {
                 .child(self.button(
                     "toggle-comparison",
                     if self.show_comparison {
-                        "↓  Compare environments"
+                        "−  Compare environments"
                     } else {
-                        "→  Compare environments"
+                        "+  Compare environments"
                     },
                     cx,
                     |s, _, cx| {
@@ -816,7 +865,7 @@ impl Render for EnvironmentView {
                     .p_3()
                     .border_b_1()
                     .border_color(rgb(theme::BORDER))
-                    .child(div().text_color(rgb(theme::MUTED)).child("Workspace"))
+                    .child(div().text_color(rgb(theme::MUTED)).child("Directory"))
                     .child(format!(
                         "Active: {}",
                         self.selected()
@@ -864,7 +913,8 @@ impl Render for EnvironmentView {
             )
             .child(
                 div()
-                    .p_3()
+                    .px_4()
+                    .py_2()
                     .border_t_1()
                     .border_color(rgb(theme::BORDER))
                     .text_size(px(11.))

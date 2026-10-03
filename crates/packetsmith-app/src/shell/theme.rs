@@ -1,99 +1,65 @@
-//! Aurora design language for PacketSmith.
-//! Deep space-navy canvas, layered luminous surfaces, and a vivid
-//! violet-to-blue gradient brand inspired by Linear, Raycast, and Stripe.
+//! Shared desktop palette: neutral charcoal surfaces and a restrained blue accent.
+use gpui::{rgb, Background};
 
-use gpui::{linear_color_stop, linear_gradient, rgba, Background};
+pub const CANVAS: u32 = 0x181a1f;
+pub const ACTIVITY_BAR: u32 = 0x14161a;
+pub const SIDEBAR: u32 = 0x1c1e24;
+pub const HEADER: u32 = 0x1c1e24;
+pub const SURFACE: u32 = 0x20232a;
+pub const SURFACE_ELEVATED: u32 = 0x262930;
+pub const HOVER: u32 = 0x2d3039;
+pub const ACTIVE: u32 = 0x303b53;
+pub const BORDER: u32 = 0x363a43;
+pub const BORDER_SUBTLE: u32 = 0x2b2e36;
+pub const BORDER_FOCUS: u32 = 0x729bff;
+pub const BORDER_GLOW: u32 = 0x729bff55;
+pub const TEXT: u32 = 0xe9ebf0;
+pub const TEXT_SECONDARY: u32 = 0xb6bcc8;
+pub const MUTED: u32 = 0x9098a8;
+pub const MUTED_DARK: u32 = 0x697181;
+pub const ACCENT: u32 = 0x4c78f5;
+pub const ACCENT_DEEP: u32 = 0x426ae0;
+pub const ACCENT_HOVER: u32 = 0x638cff;
+pub const ACCENT_LIGHT: u32 = 0x91b2ff;
+pub const ACCENT_BG: u32 = 0x25334d;
+pub const SPOTLIGHT: u32 = 0x79c9dc;
+pub const SPOTLIGHT_BG: u32 = 0x20343d;
+pub const INK: u32 = 0xffffff;
+pub const DANGER: u32 = 0xf18b91;
+pub const DANGER_BG: u32 = 0x3d282f;
+pub const WARNING: u32 = 0xe9c078;
+pub const WARNING_BG: u32 = 0x393226;
+pub const SUCCESS: u32 = 0x77d4ab;
+pub const SUCCESS_BG: u32 = 0x22382f;
 
-// --- Surfaces & Canvas ---
-pub const CANVAS: u32 = 0x0a0f1e; // Deep space-navy canvas
-pub const ACTIVITY_BAR: u32 = 0x070c17; // Narrow leftmost navigation rail
-pub const SIDEBAR: u32 = 0x0e1425; // Primary sidebar background
-pub const HEADER: u32 = 0x0e1425; // Top navigation bar
-pub const SURFACE: u32 = 0x141b30; // Input, panel, and card background
-pub const SURFACE_ELEVATED: u32 = 0x1a2340; // Dropdowns, popovers, active tabs
-pub const HOVER: u32 = 0x222c4e; // Hover state for interactive items
-pub const ACTIVE: u32 = 0x2a3763; // Selected/active row or tab
-
-// --- Borders & Dividers ---
-pub const BORDER: u32 = 0x273259; // Luminous dividing borders
-pub const BORDER_SUBTLE: u32 = 0x1a2342; // Very subtle interior borders
-pub const BORDER_FOCUS: u32 = 0x8b5cf6; // Active input focus ring (Violet)
-pub const BORDER_GLOW: u32 = 0x8b5cf655; // Violet glow accents (RGBA)
-
-// --- Typography & Content Colors ---
-pub const TEXT: u32 = 0xf2f5fd; // Primary text (near-white)
-pub const TEXT_SECONDARY: u32 = 0xa9b4cf; // Secondary text (cool slate)
-pub const MUTED: u32 = 0x67769a; // Muted labels, placeholders, breadcrumbs
-pub const MUTED_DARK: u32 = 0x46536f; // Very subtle helper text
-
-// --- Brand & Semantic Accents ---
-pub const ACCENT: u32 = 0x8b5cf6; // Primary vivid violet action
-pub const ACCENT_DEEP: u32 = 0x6d28d9; // Gradient/pressed violet depth
-pub const ACCENT_HOVER: u32 = 0x7c3aed; // Violet hover
-pub const ACCENT_LIGHT: u32 = 0xa78bfa; // Soft violet highlight
-pub const ACCENT_BG: u32 = 0x1d1445; // Violet tint background
-pub const SPOTLIGHT: u32 = 0x22d3ee; // Cyan spotlight for live/secondary accents
-pub const SPOTLIGHT_BG: u32 = 0x07333d; // Cyan tint background
-pub const INK: u32 = 0xffffff; // Text on primary buttons
-pub const DANGER: u32 = 0xfb7185; // Danger / Delete rose
-pub const DANGER_BG: u32 = 0x471422; // Danger tint background
-pub const WARNING: u32 = 0xfbbf24; // Warning amber
-pub const WARNING_BG: u32 = 0x45300a; // Warning tint background
-pub const SUCCESS: u32 = 0x34d399; // Success emerald
-pub const SUCCESS_BG: u32 = 0x06382a; // Success tint background
-
-/// Violet-to-blue brand gradient for primary actions (Send, logo, key CTAs).
-/// Angle 90deg sweeps left-to-right.
+// Solid primary actions keep the visual hierarchy quiet and predictable.
 pub fn brand_gradient() -> Background {
-    linear_gradient(
-        90.,
-        linear_color_stop(rgba(0xa855f7ff), 0.),
-        linear_color_stop(rgba(0x3b82f6ff), 1.),
-    )
+    rgb(ACCENT).into()
 }
-
-/// Brighter hover variant of the brand gradient.
 pub fn brand_gradient_hover() -> Background {
-    linear_gradient(
-        90.,
-        linear_color_stop(rgba(0xb46bffff), 0.),
-        linear_color_stop(rgba(0x4f8dffff), 1.),
-    )
+    rgb(ACCENT_HOVER).into()
 }
-
-/// Pressed/active variant of the brand gradient.
 pub fn brand_gradient_active() -> Background {
-    linear_gradient(
-        90.,
-        linear_color_stop(rgba(0x9333eaff), 0.),
-        linear_color_stop(rgba(0x2563ebff), 1.),
-    )
+    rgb(ACCENT_DEEP).into()
 }
-
-/// Subtle top-lit card sheen for elevated panels.
 pub fn card_sheen() -> Background {
-    linear_gradient(
-        180.,
-        linear_color_stop(rgba(0xffffff10), 0.),
-        linear_color_stop(rgba(0xffffff00), 1.),
-    )
+    rgb(SURFACE_ELEVATED).into()
 }
 
-// --- HTTP Method Colors (bright modern set) ---
-pub const METHOD_GET: u32 = 0x34d399; // Emerald
-pub const METHOD_GET_BG: u32 = 0x06382a;
-pub const METHOD_POST: u32 = 0x38bdf8; // Sky Blue
-pub const METHOD_POST_BG: u32 = 0x0b2c4e;
-pub const METHOD_PUT: u32 = 0xfbbf24; // Amber
-pub const METHOD_PUT_BG: u32 = 0x45300a;
-pub const METHOD_PATCH: u32 = 0xa78bfa; // Violet
-pub const METHOD_PATCH_BG: u32 = 0x2e1a5e;
-pub const METHOD_DELETE: u32 = 0xfb7185; // Rose Red
-pub const METHOD_DELETE_BG: u32 = 0x471422;
-pub const METHOD_HEAD: u32 = 0x22d3ee; // Cyan
-pub const METHOD_HEAD_BG: u32 = 0x07333d;
-pub const METHOD_OPTIONS: u32 = 0xf472b6; // Pink
-pub const METHOD_OPTIONS_BG: u32 = 0x43122b;
+pub const METHOD_GET: u32 = SUCCESS;
+pub const METHOD_GET_BG: u32 = SUCCESS_BG;
+pub const METHOD_POST: u32 = 0xe9c078;
+pub const METHOD_POST_BG: u32 = WARNING_BG;
+pub const METHOD_PUT: u32 = 0x91b2ff;
+pub const METHOD_PUT_BG: u32 = ACCENT_BG;
+pub const METHOD_PATCH: u32 = 0xc2a0ec;
+pub const METHOD_PATCH_BG: u32 = 0x342b43;
+pub const METHOD_DELETE: u32 = DANGER;
+pub const METHOD_DELETE_BG: u32 = DANGER_BG;
+pub const METHOD_HEAD: u32 = SPOTLIGHT;
+pub const METHOD_HEAD_BG: u32 = SPOTLIGHT_BG;
+pub const METHOD_OPTIONS: u32 = 0xdca0c3;
+pub const METHOD_OPTIONS_BG: u32 = 0x392b36;
 
 /// Returns the primary text color for a given HTTP method.
 pub fn method_color(method: &str) -> u32 {
